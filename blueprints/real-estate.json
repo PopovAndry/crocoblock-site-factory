@@ -1,0 +1,126 @@
+{"theme": {
+  "slug": "kava",
+  "path": "/var/www/themes/kava.zip"
+},
+   "plugins": [
+  {
+    "slug": "jet-engine",
+    "path": "/var/www/plugins/jet-engine.zip",
+    "activate": true
+  }
+], 
+  "version": "0.2",
+  "site": {
+  "name": "Real Estate Site",
+  "language": "en",
+  "permalink": "/%postname%/"
+},
+"pages": {
+  "archive": {
+    "post_type": "property",
+    "slug": "properties",
+    "title": "Properties"
+  }
+},
+  "cpt": [
+    {
+      "slug": "property",
+      "label": "Properties",
+      "singular": "Property",
+      "supports": ["title", "editor", "thumbnail"],
+      "meta": [
+        {
+          "key": "price",
+          "type": "number",
+          "label": "Price"
+        },
+        {
+          "key": "address",
+          "type": "text",
+          "label": "Address"
+        },
+        {
+          "key": "bedrooms",
+          "type": "number",
+          "label": "Bedrooms"
+        }
+      ]
+    }
+  ],
+  "content": {
+    "property": [
+      {
+        "title": "Modern Apartment in Berlin",
+        "content": "A bright modern apartment suitable for a small family.",
+        "meta": {
+          "price": 120000,
+          "address": "Berlin center",
+          "bedrooms": 2
+        }
+      },
+      {
+        "title": "Family House with Garden",
+        "content": "Comfortable family house with a private garden.",
+        "meta": {
+          "price": 250000,
+          "address": "Potsdam area",
+          "bedrooms": 4
+        }
+      }
+    ]
+  },
+
+  "listings": [
+  {
+    "slug": "property-card",
+    "title": "Property Card",
+    "post_type": "property",
+"layout": [
+  {
+    "type": "title"
+  },
+  {
+    "type": "meta",
+    "key": "price",
+    "label": "Price",
+    "format": "currency"
+  },
+  {
+    "type": "meta",
+    "key": "address",
+    "label": "Address"
+  },
+  {
+    "type": "meta",
+    "key": "bedrooms",
+    "label": "Bedrooms"
+  }
+]
+  }
+],
+"single": {
+  "property": {
+    "layout": [
+      {
+        "type": "meta",
+        "key": "price",
+        "label": "Price",
+        "format": "currency"
+      },
+      {
+        "type": "meta",
+        "key": "bedrooms",
+        "label": "Bedrooms"
+      },
+      {
+        "type": "meta",
+        "key": "address",
+        "label": "Address"
+      },
+      {
+        "type": "content"
+      }
+    ]
+  }
+}
+}

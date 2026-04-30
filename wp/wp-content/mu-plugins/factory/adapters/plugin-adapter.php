@@ -1,0 +1,186 @@
+<?php
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+class Factory_Plugin_Adapter {
+
+	public function register( array $blueprint ): void {
+		// Plugins are handled only during apply/validate.
+	}
+
+	public function apply( array $blueprint ): void {
+		foreach ( $blueprint['plugins'] ?? [] as $plugin_config ) {
+			$plugin = $this->normalize_plugin_config( $plugin_config );
+
+			if ( empty( $plugin['slug'] ) ) {
+				$this->warn( 'Plugin slug is missing.' );
+				continue;
+			}
+
+			$slug     = $plugin['slug'];
+			$path     = $plugin['path'];
+			$activate = $plugin['activate'];
+
+			if ( $this->is_active( $slug ) ) {
+				$this->log( "Plugin already active: {$slug}" );
+				continue;
+			}
+
+			if ( $this->exists( $slug ) ) {
+				$this->log( "Plugin already installed: {$slug}" );
+
+				if ( $activate ) {
+					$this->activate( $slug );
+				}
+
+				continue;
+			}
+
+			if ( $path && file_exists( $path ) ) {
+				$this->install_from_path( $slug, $path );
+
+				if ( $activate ) {
+					$this->activate( $slug );
+				}
+
+				continue;
+			}
+
+			$fallback_zip = "/var/www/plugins/{$slug}.zip";
+
+			if ( file_exists( $fallback_zip ) ) {
+				$this->install_from_path( $slug, $fallback_zip );
+
+				if ( $activate ) {
+					$this->activate( $slug );
+				}
+
+				continue;
+			}
+
+			$this->warn( "Plugin not found: {$slug}" );
+		}
+	}
+
+	public function validate( array $blueprint ): array {
+		$checks = [];
+
+		foreach ( $blueprint['plugins'] ?? [] as $plugin_config ) {
+			$plugin = $this->normalize_plugin_config( $plugin_config );
+
+			if ( empty( $plugin['slug'] ) ) {
+				$checks[] = [
+					'status'  => 'error',
+					'message' => 'Plugin slug is missing.',
+				];
+
+				continue;
+			}
+
+			$slug = $plugin['slug'];
+
+			if ( $this->is_active( $slug ) ) {
+				$checks[] = [
+					'status'  => 'ok',
+					'message' => "Plugin active: {$slug}",
+				];
+			} elseif ( $this->exists( $slug ) ) {
+				$checks[] = [
+					'status'  => 'warning',
+					'message' => "Plugin installed but not active: {$slug}",
+				];
+			} else {
+				$checks[] = [
+					'status'  => 'error',
+					'message' => "Plugin missing: {$slug}",
+				];
+			}
+		}
+
+		return $checks;
+	}
+
+	private function normalize_plugin_config( $plugin_config ): array {
+		if ( is_string( $plugin_config ) ) {
+			return [
+				'slug'     => $plugin_config,
+				'path'     => "/var/www/plugins/{$plugin_config}.zip",
+				'activate' => true,
+			];
+		}
+
+		if ( is_array( $plugin_config ) ) {
+			$slug = $plugin_config['slug'] ?? '';
+
+			return [
+				'slug'     => $slug,
+				'path'     => $plugin_config['path'] ?? ( $slug ? "/var/www/plugins/{$slug}.zip" : '' ),
+				'activate' => $plugin_config['activate'] ?? true,
+			];
+		}
+
+		return [
+			'slug'     => '',
+			'path'     => '',
+			'activate' => false,
+		];
+	}
+
+	private function is_active( string $slug ): bool {
+		include_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+		foreach ( get_plugins() as $file => $data ) {
+			if ( str_starts_with( $file, $slug . '/' ) ) {
+				return is_plugin_active( $file );
+			}
+		}
+
+		return false;
+	}
+
+	private function exists( string $slug ): bool {
+		return is_dir( WP_PLUGIN_DIR . '/' . $slug );
+	}
+
+	private function install_from_path( string $slug, string $path ): void {
+		if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
+			return;
+		}
+
+		$this->log( "Installing plugin from: {$path}" );
+
+		WP_CLI::runcommand(
+			'plugin install ' . escapeshellarg( $path ) . ' --force',
+			[ 'launch' => false ]
+		);
+
+		$this->log( "Plugin installed: {$slug}" );
+	}
+
+	private function activate( string $slug ): void {
+		if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
+			return;
+		}
+
+		$this->log( "Activating plugin: {$slug}" );
+
+		WP_CLI::runcommand(
+			'plugin activate ' . escapeshellarg( $slug ),
+			[ 'launch' => false ]
+		);
+	}
+
+	private function log( string $message ): void {
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			WP_CLI::log( $message );
+		}
+	}
+
+	private function warn( string $message ): void {
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			WP_CLI::warning( $message );
+		}
+	}
+}

@@ -1,0 +1,21 @@
+# WordPress
+wp/wp-content/uploads/
+wp/wp-content/cache/
+
+# Node / misc
+node_modules/
+vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+
+# Logs
+*.log
+
+# Generated blueprints
+blueprints/generated/
+blueprints/cache/
