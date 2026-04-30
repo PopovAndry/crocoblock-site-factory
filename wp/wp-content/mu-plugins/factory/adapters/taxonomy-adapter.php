@@ -88,6 +88,45 @@ class Factory_Taxonomy_Adapter {
 		return $checks;
 	}
 
+    private function get_current_taxonomy_state( string $slug ): array {
+	if ( ! taxonomy_exists( $slug ) ) {
+		return [];
+	}
+
+	$object = get_taxonomy( $slug );
+
+	if ( ! $object ) {
+		return [];
+	}
+
+	return [
+		'slug'         => $slug,
+		'label'        => $object->label ?? '',
+		'hierarchical' => (bool) ( $object->hierarchical ?? false ),
+		'show_in_rest' => (bool) ( $object->show_in_rest ?? false ),
+	];
+}
+
+private function get_current_terms_state( string $taxonomy ): array {
+	if ( ! taxonomy_exists( $taxonomy ) ) {
+		return [];
+	}
+
+	$terms = get_terms( [
+		'taxonomy'   => $taxonomy,
+		'hide_empty' => false,
+		'fields'     => 'names',
+	] );
+
+	if ( is_wp_error( $terms ) || ! is_array( $terms ) ) {
+		return [];
+	}
+
+	sort( $terms );
+
+	return $terms;
+}
+
 	private function register_taxonomy( array $tax ): void {
 
 		$slug       = $tax['slug'];
@@ -95,29 +134,65 @@ class Factory_Taxonomy_Adapter {
 		$label      = $tax['label'] ?? ucfirst( $slug );
 		$singular   = $tax['singular'] ?? ucfirst( $slug );
 
-		register_taxonomy( $slug, $post_type, [
-			'label'        => $label,
-			'labels'       => [
-				'name'          => $label,
-				'singular_name' => $singular,
-			],
-			'public'       => true,
-			'show_in_rest' => true,
-			'hierarchical' => true,
-		] );
+        $current = $this->get_current_taxonomy_state( $slug );
+
+        $target = [
+            'slug'         => $slug,
+            'label'        => $label,
+            'hierarchical' => true,
+            'show_in_rest' => true,
+        ];
+
+        $diff = factory_diff_arrays( $current, $target );
+
+        if ( empty( $current ) || ! empty( $diff ) ) {
+
+            if ( defined('WP_CLI') && WP_CLI ) {
+                WP_CLI::log("Applying taxonomy: {$slug}");
+            }
+
+            register_taxonomy( $slug, $post_type, [
+                'label'        => $label,
+                'labels'       => [
+                    'name'          => $label,
+                    'singular_name' => $singular,
+                ],
+                'public'       => true,
+                'show_in_rest' => true,
+                'hierarchical' => true,
+            ] );
+
+        } else {
+            if ( defined('WP_CLI') && WP_CLI ) {
+                WP_CLI::log("Taxonomy up-to-date: {$slug}");
+            }
+        }
 	}
 
 	private function sync_terms( array $tax ): void {
 
 		$slug = $tax['slug'];
 
-		foreach ( $tax['terms'] ?? [] as $term_name ) {
+        $current_terms = $this->get_current_terms_state( $slug );
+        $target_terms  = $tax['terms'] ?? [];
 
-			if ( term_exists( $term_name, $slug ) ) {
-				continue;
-			}
+        sort( $target_terms );
 
-			wp_insert_term( $term_name, $slug );
-		}
+        $term_diff = factory_diff_arrays( $current_terms, $target_terms );
+
+        if ( ! empty( $term_diff ) && defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::log( "Terms diff detected: {$slug}" );
+        }
+
+        if ( empty( $term_diff ) ) {
+            if ( defined('WP_CLI') && WP_CLI ) {
+                WP_CLI::log("Terms up-to-date: {$slug}");
+            }
+            return;
+        }
+
+        if ( defined('WP_CLI') && WP_CLI ) {
+            WP_CLI::log("Syncing terms: {$slug}");
+        }
 	}
 }

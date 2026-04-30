@@ -15,7 +15,7 @@ require_once __DIR__ . '/adapters/jetengine-listing-adapter.php';
 require_once __DIR__ . '/adapters/render-adapter.php';
 require_once __DIR__ . '/adapters/single-adapter.php';
 require_once __DIR__ . '/adapters/taxonomy-adapter.php';
-
+require_once __DIR__ . '/utils/diff.php';
 require_once __DIR__ . '/blueprint/blueprint-normalizer.php';
 require_once __DIR__ . '/blueprint/blueprint-preset-manager.php';
 require_once __DIR__ . '/ai/blueprint-generator.php';

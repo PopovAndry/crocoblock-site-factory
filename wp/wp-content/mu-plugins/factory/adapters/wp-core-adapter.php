@@ -159,6 +159,24 @@ class Factory_WP_Core_Adapter {
 		return $results;
 	}
 
+	private function get_current_cpt_state( string $slug ): array {
+	if ( ! post_type_exists( $slug ) ) {
+		return [];
+	}
+
+	$object = get_post_type_object( $slug );
+
+	if ( ! $object ) {
+		return [];
+	}
+
+	return [
+		'slug'     => $slug,
+		'label'    => $object->label ?? '',
+		'supports' => get_all_post_type_supports( $slug ),
+	];
+}
+
 private function register_cpt( array $cpt ): void {
 
 	if ( empty( $cpt['slug'] ) ) {
@@ -166,6 +184,20 @@ private function register_cpt( array $cpt ): void {
 	}
 
 	$slug = $cpt['slug'];
+
+	$current = $this->get_current_cpt_state( $slug );
+
+	$target = [
+		'slug'     => $slug,
+		'label'    => $cpt['label'] ?? ucfirst( $slug ),
+		'supports' => array_fill_keys( $cpt['supports'] ?? [ 'title', 'editor' ], true ),
+	];
+
+	$diff = factory_diff_arrays( $current, $target );
+
+	if ( ! empty( $diff ) && defined( 'WP_CLI' ) && WP_CLI ) {
+		WP_CLI::log( "CPT diff detected: {$slug}" );
+	}
 
 	register_post_type( $slug, [
 		'label'           => $cpt['label'] ?? ucfirst( $slug ),
@@ -178,7 +210,6 @@ private function register_cpt( array $cpt ): void {
 			'slug'       => $slug,
 			'with_front' => false,
 		],
-
 		'publicly_queryable' => true,
 		'show_ui'            => true,
 	] );
