@@ -1,21 +1,39 @@
-# WordPress
+# WordPress core
+wp/wp-admin/
+wp/wp-includes/
+wp/*.php
+wp/*.txt
+wp/*.html
+wp/*.xml
+wp/.htaccess
+
+# Keep our MU plugin
+!wp/wp-content/
+!wp/wp-content/mu-plugins/
+!wp/wp-content/mu-plugins/factory.php
+!wp/wp-content/mu-plugins/factory/
+
+# WordPress generated
 wp/wp-content/uploads/
 wp/wp-content/cache/
+wp/wp-content/upgrade/
+wp/wp-content/languages/
 
-# Node / misc
+# Local config / secrets
+.env
+
+# Generated runtime files
+blueprints/generated/
+blueprints/cache/
+blueprints/last-ai-response.txt
+
+# Logs
+*.log
+
+# Dependencies
 node_modules/
 vendor/
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Env
-.env
-
-# Logs
-*.log
-
-# Generated blueprints
-blueprints/generated/
-blueprints/cache/
