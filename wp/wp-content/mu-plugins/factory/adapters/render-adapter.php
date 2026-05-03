@@ -17,34 +17,33 @@ class Factory_Render_Adapter {
 	}
 
 	public function validate( array $blueprint ): array {
-	$checks = [];
+		$checks = [];
 
-	foreach ( $blueprint['listings'] ?? [] as $listing ) {
-		$post_type = $listing['post_type'] ?? '';
+		foreach ( $blueprint['listings'] ?? [] as $listing ) {
+			$post_type = $listing['post_type'] ?? '';
 
-		if ( ! $post_type ) {
-			continue;
+			if ( ! $post_type ) {
+				continue;
+			}
+
+			$page_config = $this->get_archive_page_config( $post_type );
+
+			$page_slug = $page_config['slug'] ?? $post_type . 's';
+			$page      = get_page_by_path( $page_slug );
+
+			$checks[] = [
+				'status'  => $page ? 'ok' : 'error',
+				'message' => $page
+					? "Render page exists: {$page_slug}"
+					: "Render page missing: {$page_slug}",
+			];
 		}
 
-		$page_config = $this->get_archive_page_config( $post_type );
-
-		$page_slug = $page_config['slug'] ?? $post_type . 's';
-		$page      = get_page_by_path( $page_slug );
-
-		$checks[] = [
-			'status'  => $page ? 'ok' : 'error',
-			'message' => $page
-				? "Render page exists: {$page_slug}"
-				: "Render page missing: {$page_slug}",
-		];
+		return $checks;
 	}
-
-	return $checks;
-}
 
 	private function upsert_listing_page( array $listing ): void {
 		$slug      = $listing['slug'] ?? '';
-		$title     = $listing['title'] ?? $slug;
 		$post_type = $listing['post_type'] ?? '';
 
 		if ( ! $slug || ! $post_type ) {
@@ -63,8 +62,7 @@ class Factory_Render_Adapter {
 
 		$existing = get_page_by_path( $page_slug );
 
-		$post_data = [
-			'post_type'    => 'page',
+		$target_state = [
 			'post_title'   => $page_title,
 			'post_name'    => $page_slug,
 			'post_status'  => 'publish',
@@ -72,13 +70,39 @@ class Factory_Render_Adapter {
 		];
 
 		if ( $existing ) {
+			$current_state = [
+				'post_title'   => $existing->post_title,
+				'post_name'    => $existing->post_name,
+				'post_status'  => $existing->post_status,
+				'post_content' => $existing->post_content,
+			];
+
+			$diff = factory_diff_arrays( $current_state, $target_state );
+
+			if ( empty( $diff ) ) {
+				$this->log( "Render page up-to-date: {$page_slug}" );
+				return;
+			}
+
+			$post_data       = $target_state;
 			$post_data['ID'] = $existing->ID;
+			$post_data['post_type'] = 'page';
+
 			wp_update_post( $post_data );
 			$this->log( "Render page updated: {$page_slug}" );
-		} else {
-			wp_insert_post( $post_data );
-			$this->log( "Render page created: {$page_slug}" );
+
+			return;
 		}
+
+		wp_insert_post( [
+			'post_type'    => 'page',
+			'post_title'   => $page_title,
+			'post_name'    => $page_slug,
+			'post_status'  => 'publish',
+			'post_content' => $content,
+		] );
+
+		$this->log( "Render page created: {$page_slug}" );
 	}
 
 	public function render_listing_shortcode( array $atts ): string {
@@ -142,46 +166,46 @@ class Factory_Render_Adapter {
 						</h2>
 
 						<?php
-							$layout = $listing['layout'] ?? [];
+						$layout = $listing['layout'] ?? [];
 
-							if ( empty( $layout ) && ! empty( $listing['fields'] ) ) {
-								$layout = $listing['fields'];
+						if ( empty( $layout ) && ! empty( $listing['fields'] ) ) {
+							$layout = $listing['fields'];
+						}
+						?>
+
+						<?php foreach ( $layout as $field ) : ?>
+							<?php
+							if ( ( $field['type'] ?? '' ) !== 'meta' ) {
+								continue;
 							}
+
+							$key = $field['key'] ?? '';
+
+							if ( ! $key ) {
+								continue;
+							}
+
+							$value = get_post_meta( get_the_ID(), $key, true );
+
+							if ( $value === '' ) {
+								continue;
+							}
+
+							$label  = $field['label'] ?? ucfirst( $key );
+							$format = $field['format'] ?? '';
 							?>
 
-							<?php foreach ( $layout as $field ) : ?>
+							<div style="margin-top: 10px;">
+								<strong><?php echo esc_html( $label ); ?>:</strong>
 								<?php
-								if ( ( $field['type'] ?? '' ) !== 'meta' ) {
-									continue;
+								if ( $format === 'currency' ) {
+									echo '$' . esc_html( number_format( (float) $value ) );
+								} else {
+									echo esc_html( $value );
 								}
-
-								$key = $field['key'] ?? '';
-
-								if ( ! $key ) {
-									continue;
-								}
-
-								$value = get_post_meta( get_the_ID(), $key, true );
-
-								if ( $value === '' ) {
-									continue;
-								}
-
-								$label  = $field['label'] ?? ucfirst( $key );
-								$format = $field['format'] ?? '';
 								?>
-
-								<div style="margin-top: 10px;">
-									<strong><?php echo esc_html( $label ); ?>:</strong>
-									<?php
-									if ( $format === 'currency' ) {
-										echo '$' . esc_html( number_format( (float) $value ) );
-									} else {
-										echo esc_html( $value );
-									}
-									?>
-								</div>
-							<?php endforeach; ?>
+							</div>
+						<?php endforeach; ?>
 					</article>
 
 				<?php endwhile; ?>
@@ -196,21 +220,20 @@ class Factory_Render_Adapter {
 	}
 
 	private function get_archive_page_config( string $post_type ): array {
-	$blueprint = factory_get_blueprint();
+		$blueprint = factory_get_blueprint();
 
-	$archive = $blueprint['pages']['archive'] ?? [];
+		$archive = $blueprint['pages']['archive'] ?? [];
 
-	if ( ( $archive['post_type'] ?? '' ) === $post_type ) {
-		return $archive;
+		if ( ( $archive['post_type'] ?? '' ) === $post_type ) {
+			return $archive;
+		}
+
+		return [];
 	}
-
-	return [];
-}
 
 	private function log( string $message ): void {
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			WP_CLI::log( $message );
 		}
 	}
-	
 }
