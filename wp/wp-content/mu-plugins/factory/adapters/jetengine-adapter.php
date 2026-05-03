@@ -110,15 +110,6 @@ class Factory_JetEngine_Adapter {
 		$post_type = $cpt['slug'];
 		$box_id    = $this->get_box_id( $post_type );
 
-		$box_index = null;
-
-		foreach ( $boxes as $index => $box ) {
-			if ( ( $box['id'] ?? '' ) === $box_id ) {
-				$box_index = $index;
-				break;
-			}
-		}
-
 		$meta_fields = [];
 
 		foreach ( $cpt['meta'] ?? [] as $meta ) {
@@ -145,15 +136,76 @@ class Factory_JetEngine_Adapter {
 			'meta_fields' => $meta_fields,
 		];
 
-		if ( $box_index === null ) {
+		$current_state = $this->get_current_meta_box_state( $boxes, $box_id );
+
+		$target_state = [
+			'id'          => $new_box['id'],
+			'title'       => $new_box['title'],
+			'meta_fields' => $this->normalize_meta_fields_for_diff( $new_box['meta_fields'] ),
+		];
+
+		$diff = factory_diff_arrays( $current_state, $target_state );
+
+		if ( empty( $current_state ) || ! empty( $diff ) ) {
+			if ( ! empty( $diff ) ) {
+				$this->log( "JetEngine meta box diff detected: {$box_id}" );
+			}
+
+			$this->log( "Applying JetEngine meta box: {$box_id}" );
+
+			$boxes = array_values(
+				array_filter(
+					$boxes,
+					function ( $box ) use ( $box_id ) {
+						return ( $box['id'] ?? '' ) !== $box_id;
+					}
+				)
+			);
+
 			$boxes[] = $new_box;
-			$this->log( "JetEngine meta box created: {$box_id}" );
-		} else {
-			$boxes[ $box_index ] = $new_box;
-			$this->log( "JetEngine meta box updated: {$box_id}" );
+
+			return $boxes;
 		}
 
+		$this->log( "JetEngine meta box up-to-date: {$box_id}" );
+
 		return $boxes;
+	}
+
+	private function get_current_meta_box_state( array $boxes, string $box_id ): array {
+		$box = $this->find_box( $boxes, $box_id );
+
+		if ( ! $box ) {
+			return [];
+		}
+
+		return [
+			'id'          => $box['id'] ?? '',
+			'title'       => $box['title'] ?? '',
+			'meta_fields' => $this->normalize_meta_fields_for_diff( $box['meta_fields'] ?? [] ),
+		];
+	}
+
+	private function normalize_meta_fields_for_diff( array $fields ): array {
+		$result = [];
+
+		foreach ( $fields as $field ) {
+			$name = $field['name'] ?? '';
+
+			if ( ! $name ) {
+				continue;
+			}
+
+			$result[ $name ] = [
+				'name'  => $name,
+				'title' => $field['title'] ?? $name,
+				'type'  => $field['type'] ?? 'text',
+			];
+		}
+
+		ksort( $result );
+
+		return $result;
 	}
 
 	private function remove_old_factory_boxes( array $boxes ): array {
