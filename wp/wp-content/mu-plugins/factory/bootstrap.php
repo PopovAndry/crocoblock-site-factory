@@ -20,6 +20,7 @@ require_once __DIR__ . '/utils/diff.php';
 require_once __DIR__ . '/blueprint/blueprint-normalizer.php';
 require_once __DIR__ . '/blueprint/blueprint-preset-manager.php';
 require_once __DIR__ . '/ai/blueprint-generator.php';
+require_once __DIR__ . '/commands/fix.php';
 
 function factory_get_blueprint(): array {
 	$blueprint = get_option( FACTORY_BLUEPRINT_OPTION );
@@ -120,6 +121,10 @@ function factory_validate_blueprint_state( array $blueprint, bool $cli_output = 
 	}
 
 	return $report;
+}
+
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	WP_CLI::add_command( 'factory fix', Factory_Fix_Command::class );
 }
 
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -247,36 +252,36 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		WP_CLI::success( 'Factory reset complete.' );
 	} );
 
-	// FIX
-	WP_CLI::add_command( 'factory fix', function () {
-		$upload_dir = wp_upload_dir();
-		$file_path  = $upload_dir['basedir'] . '/factory-report.json';
+	// // FIX
+	// WP_CLI::add_command( 'factory fix', function () {
+	// 	$upload_dir = wp_upload_dir();
+	// 	$file_path  = $upload_dir['basedir'] . '/factory-report.json';
 
-		if ( ! file_exists( $file_path ) ) {
-			WP_CLI::error( 'Report not found. Run validate first.' );
-		}
+	// 	if ( ! file_exists( $file_path ) ) {
+	// 		WP_CLI::error( 'Report not found. Run validate first.' );
+	// 	}
 
-		$report = json_decode( file_get_contents( $file_path ), true );
+	// 	$report = json_decode( file_get_contents( $file_path ), true );
 
-		if ( ! is_array( $report ) ) {
-			WP_CLI::error( 'Invalid report format.' );
-		}
+	// 	if ( ! is_array( $report ) ) {
+	// 		WP_CLI::error( 'Invalid report format.' );
+	// 	}
 
-		if ( ( $report['status'] ?? 'error' ) === 'ok' ) {
-			WP_CLI::success( 'No issues found. Nothing to fix.' );
-			return;
-		}
+	// 	if ( ( $report['status'] ?? 'error' ) === 'ok' ) {
+	// 		WP_CLI::success( 'No issues found. Nothing to fix.' );
+	// 		return;
+	// 	}
 
-		WP_CLI::log( 'Fixing issues based on blueprint...' );
+	// 	WP_CLI::log( 'Fixing issues based on blueprint...' );
 
-		$blueprint = factory_get_blueprint();
+	// 	$blueprint = factory_get_blueprint();
 
-		foreach ( factory_get_adapters() as $adapter ) {
-			$adapter->apply( $blueprint );
-		}
+	// 	foreach ( factory_get_adapters() as $adapter ) {
+	// 		$adapter->apply( $blueprint );
+	// 	}
 
-		WP_CLI::success( 'Fix attempt completed.' );
-	} );
+	// 	WP_CLI::success( 'Fix attempt completed.' );
+	// } );
 
 	WP_CLI::add_command( 'factory preset', function ( $args ) {
 	$preset = $args[0] ?? '';
