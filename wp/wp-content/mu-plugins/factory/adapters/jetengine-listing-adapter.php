@@ -39,17 +39,12 @@ class Factory_JetEngine_Listing_Adapter {
 
 			$post = $this->find_listing_by_slug( $slug );
 
-			if ( $post ) {
-				$checks[] = [
-					'status'  => 'ok',
-					'message' => "Listing exists: {$title}",
-				];
-			} else {
-				$checks[] = [
-					'status'  => 'error',
-					'message' => "Listing missing: {$title}",
-				];
-			}
+			$checks[] = [
+				'status'  => $post ? 'ok' : 'error',
+				'message' => $post
+					? "Listing exists: {$title}"
+					: "Listing missing: {$title}",
+			];
 		}
 
 		return $checks;
@@ -65,31 +60,60 @@ class Factory_JetEngine_Listing_Adapter {
 			return;
 		}
 
-		$content = $this->generate_blocks( $listing );
-
+		$content  = $this->generate_blocks( $listing );
 		$existing = $this->find_listing_by_slug( $slug );
 
-		$post_data = [
+		$target_state = $this->get_target_listing_state( $listing, $content );
+
+		if ( $existing ) {
+			$current_state = $this->get_current_listing_state( $existing );
+			$diff          = factory_diff_arrays( $current_state, $target_state );
+
+			if ( empty( $diff ) ) {
+				$this->log( "Listing up-to-date: {$title}" );
+				return;
+			}
+
+			$post_id = wp_update_post( [
+				'ID'           => $existing->ID,
+				'post_type'    => 'jet-engine',
+				'post_title'   => $title,
+				'post_name'    => $slug,
+				'post_status'  => 'publish',
+				'post_content' => $content,
+			], true );
+
+			if ( is_wp_error( $post_id ) ) {
+				$this->warn( $post_id->get_error_message() );
+				return;
+			}
+
+			$this->sync_listing_meta( (int) $post_id, $listing );
+			$this->log( "Listing updated: {$title}" );
+
+			return;
+		}
+
+		$post_id = wp_insert_post( [
 			'post_type'    => 'jet-engine',
 			'post_title'   => $title,
 			'post_name'    => $slug,
 			'post_status'  => 'publish',
 			'post_content' => $content,
-		];
-
-		if ( $existing ) {
-			$post_data['ID'] = $existing->ID;
-			$post_id         = wp_update_post( $post_data, true );
-			$action          = 'updated';
-		} else {
-			$post_id = wp_insert_post( $post_data, true );
-			$action  = 'created';
-		}
+		], true );
 
 		if ( is_wp_error( $post_id ) ) {
 			$this->warn( $post_id->get_error_message() );
 			return;
 		}
+
+		$this->sync_listing_meta( (int) $post_id, $listing );
+		$this->log( "Listing created: {$title}" );
+	}
+
+	private function sync_listing_meta( int $post_id, array $listing ): void {
+		$post_type = $listing['post_type'] ?? '';
+		$slug      = $listing['slug'] ?? '';
 
 		update_post_meta( $post_id, '_entry_type', 'listing' );
 		update_post_meta( $post_id, '_listing_type', 'blocks' );
@@ -101,49 +125,87 @@ class Factory_JetEngine_Listing_Adapter {
 		] );
 
 		update_post_meta( $post_id, '_elementor_page_settings', [
-			'listing_source'          => 'posts',
-			'listing_post_type'       => $post_type,
-			'listing_tax'             => 'category',
-			'repeater_source'         => 'jet_engine',
-			'repeater_field'          => '',
-			'repeater_option'         => '',
-			'listing_link'            => '',
-			'listing_link_source'     => '',
-			'listing_link_object_prop'=> 'post_id',
-			'listing_link_custom_url' => '',
-			'listing_link_add_query_args' => '',
-			'listing_link_query_args' => '',
-			'_post_id'                => 'current_id',
+			'listing_source'               => 'posts',
+			'listing_post_type'            => $post_type,
+			'listing_tax'                  => 'category',
+			'repeater_source'              => 'jet_engine',
+			'repeater_field'               => '',
+			'repeater_option'              => '',
+			'listing_link'                 => '',
+			'listing_link_source'          => '',
+			'listing_link_object_prop'     => 'post_id',
+			'listing_link_custom_url'      => '',
+			'listing_link_add_query_args'  => '',
+			'listing_link_query_args'      => '',
+			'_post_id'                     => 'current_id',
 		] );
 
 		update_post_meta( $post_id, '_factory_listing_key', $slug );
+	}
 
-		$this->log( "Listing {$action}: {$title}" );
+	private function get_current_listing_state( WP_Post $post ): array {
+		return [
+			'title'       => $post->post_title,
+			'slug'        => $post->post_name,
+			'content'     => $post->post_content,
+			'entry_type'  => get_post_meta( $post->ID, '_entry_type', true ),
+			'listing_type'=> get_post_meta( $post->ID, '_listing_type', true ),
+			'listing_data'=> $this->normalize_array_for_diff( get_post_meta( $post->ID, '_listing_data', true ) ),
+		];
+	}
+
+	private function get_target_listing_state( array $listing, string $content ): array {
+		$slug      = $listing['slug'] ?? '';
+		$title     = $listing['title'] ?? $slug;
+		$post_type = $listing['post_type'] ?? '';
+
+		return [
+			'title'       => $title,
+			'slug'        => $slug,
+			'content'     => $content,
+			'entry_type'  => 'listing',
+			'listing_type'=> 'blocks',
+			'listing_data'=> $this->normalize_array_for_diff( [
+				'source'    => 'posts',
+				'post_type' => $post_type,
+				'tax'       => 'category',
+			] ),
+		];
+	}
+
+	private function normalize_array_for_diff( $value ): array {
+		if ( ! is_array( $value ) ) {
+			return [];
+		}
+
+		ksort( $value );
+
+		return $value;
 	}
 
 	private function generate_blocks( array $listing ): string {
-	$blocks = [];
+		$blocks = [];
 
-	$layout = $listing['layout'] ?? [];
+		$layout = $listing['layout'] ?? [];
 
-	if ( empty( $layout ) && ! empty( $listing['fields'] ) ) {
-		$layout = $listing['fields'];
-	}
-
-	foreach ( $layout as $field ) {
-		$type = $field['type'] ?? '';
-
-		if ( $type === 'title' ) {
-			$blocks[] = $this->dynamic_title_block();
+		if ( empty( $layout ) && ! empty( $listing['fields'] ) ) {
+			$layout = $listing['fields'];
 		}
 
-		if ( $type === 'meta' && ! empty( $field['key'] ) ) {
-			$blocks[] = $this->dynamic_meta_field_block( $field['key'] );
-		}
-	}
+		foreach ( $layout as $field ) {
+			$type = $field['type'] ?? '';
 
-	return implode( "\n\n", $blocks );
-}
+			if ( $type === 'title' ) {
+				$blocks[] = $this->dynamic_title_block();
+			}
+
+			if ( $type === 'meta' && ! empty( $field['key'] ) ) {
+				$blocks[] = $this->dynamic_meta_field_block( $field['key'] );
+			}
+		}
+
+		return implode( "\n\n", $blocks );
+	}
 
 	private function dynamic_title_block(): string {
 		return '<!-- wp:jet-engine/dynamic-field {"dynamic_field_source":"post_or_term_object","dynamic_field_post_object":"post_title","crocoblock_styles":{"_uniqueClassName":"factory-title","field_width":"auto","field_alignment":"flex-start","content_alignment":"left"}} /-->';
