@@ -17,10 +17,12 @@ require_once __DIR__ . '/adapters/single-adapter.php';
 require_once __DIR__ . '/adapters/taxonomy-adapter.php';
 require_once __DIR__ . '/adapters/content-adapter.php';
 require_once __DIR__ . '/utils/diff.php';
+require_once __DIR__ . '/utils/diff-report.php';
 require_once __DIR__ . '/blueprint/blueprint-normalizer.php';
 require_once __DIR__ . '/blueprint/blueprint-preset-manager.php';
 require_once __DIR__ . '/ai/blueprint-generator.php';
 require_once __DIR__ . '/commands/fix.php';
+require_once __DIR__ . '/commands/dry-run.php';
 
 function factory_get_blueprint(): array {
 	$blueprint = get_option( FACTORY_BLUEPRINT_OPTION );
@@ -123,6 +125,22 @@ function factory_validate_blueprint_state( array $blueprint, bool $cli_output = 
 	return $report;
 }
 
+function factory_reset_diff_report(): Factory_Diff_Report {
+	global $factory_diff_report;
+
+	$factory_diff_report = new Factory_Diff_Report();
+
+	return $factory_diff_report;
+}
+
+function factory_log_diff_report(): void {
+	global $factory_diff_report;
+
+	if ( $factory_diff_report instanceof Factory_Diff_Report ) {
+		$factory_diff_report->log();
+	}
+}
+
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	WP_CLI::add_command( 'factory fix', Factory_Fix_Command::class );
 }
@@ -179,9 +197,11 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			WP_CLI::error( 'Invalid blueprint JSON.' );
 		}
 
+		factory_reset_diff_report();
+
 		factory_apply_blueprint( $blueprint );
 
-
+		factory_log_diff_report();
 
 		WP_CLI::success( "Factory blueprint applied: {$path}" );
 	} );
@@ -251,37 +271,9 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 
 		WP_CLI::success( 'Factory reset complete.' );
 	} );
+	WP_CLI::add_command( 'factory dry-run', Factory_Dry_Run_Command::class );
 
-	// // FIX
-	// WP_CLI::add_command( 'factory fix', function () {
-	// 	$upload_dir = wp_upload_dir();
-	// 	$file_path  = $upload_dir['basedir'] . '/factory-report.json';
 
-	// 	if ( ! file_exists( $file_path ) ) {
-	// 		WP_CLI::error( 'Report not found. Run validate first.' );
-	// 	}
-
-	// 	$report = json_decode( file_get_contents( $file_path ), true );
-
-	// 	if ( ! is_array( $report ) ) {
-	// 		WP_CLI::error( 'Invalid report format.' );
-	// 	}
-
-	// 	if ( ( $report['status'] ?? 'error' ) === 'ok' ) {
-	// 		WP_CLI::success( 'No issues found. Nothing to fix.' );
-	// 		return;
-	// 	}
-
-	// 	WP_CLI::log( 'Fixing issues based on blueprint...' );
-
-	// 	$blueprint = factory_get_blueprint();
-
-	// 	foreach ( factory_get_adapters() as $adapter ) {
-	// 		$adapter->apply( $blueprint );
-	// 	}
-
-	// 	WP_CLI::success( 'Fix attempt completed.' );
-	// } );
 
 	WP_CLI::add_command( 'factory preset', function ( $args ) {
 	$preset = $args[0] ?? '';
@@ -324,7 +316,11 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 
 		WP_CLI::log( 'Applying blueprint...' );
 
+		factory_reset_diff_report();
+
 		factory_apply_blueprint( $blueprint );
+
+		factory_log_diff_report();
 
 		WP_CLI::log( 'Validating...' );
 

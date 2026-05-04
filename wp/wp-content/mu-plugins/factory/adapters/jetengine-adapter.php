@@ -146,6 +146,20 @@ class Factory_JetEngine_Adapter {
 
 		$diff = factory_diff_arrays( $current_state, $target_state );
 
+		global $factory_diff_report;
+
+		if (
+			! empty( $diff )
+			&& isset( $factory_diff_report )
+			&& $factory_diff_report instanceof Factory_Diff_Report
+		) {
+			$factory_diff_report->add(
+				'jetengine',
+				$box_id,
+				$diff
+			);
+		}
+
 		if ( empty( $current_state ) || ! empty( $diff ) ) {
 			if ( ! empty( $diff ) ) {
 				$this->log( "JetEngine meta box diff detected: {$box_id}" );

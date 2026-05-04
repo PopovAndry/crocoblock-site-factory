@@ -7,87 +7,97 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_Fix_Command {
 
 	public function __invoke(): void {
-		WP_CLI::log( 'Running smart fix...' );
+		WP_CLI::log( 'Running smart fix v2...' );
 
 		$blueprint = factory_get_blueprint();
 
-		if ( ! $blueprint ) {
+		if ( empty( $blueprint ) ) {
 			WP_CLI::error( 'Blueprint not found.' );
-			return;
 		}
 
 		$adapters = factory_get_adapters();
 
-		$errors = [];
+		$failed_adapters = $this->get_failed_adapters( $adapters, $blueprint );
 
-		// 1. Validate first
-		foreach ( $adapters as $adapter ) {
-			if ( ! method_exists( $adapter, 'validate' ) ) {
-				continue;
-			}
-
-			$result = $adapter->validate( $blueprint );
-
-			foreach ( $result as $check ) {
-				if ( ( $check['status'] ?? '' ) === 'error' ) {
-					$errors[] = [
-						'adapter' => get_class( $adapter ),
-						'message' => $check['message'],
-					];
-				}
-			}
-		}
-
-		if ( empty( $errors ) ) {
+		if ( empty( $failed_adapters ) ) {
 			WP_CLI::success( 'Nothing to fix. State is valid.' );
 			return;
 		}
 
-		WP_CLI::warning( 'Detected issues:' );
+		WP_CLI::warning( 'Detected broken adapters:' );
 
-		foreach ( $errors as $error ) {
-			WP_CLI::log( $error['adapter'] . ': ' . $error['message'] );
-		}
+		foreach ( $failed_adapters as $class => $messages ) {
+			WP_CLI::log( "- {$class}" );
 
-		// 2. Fix only affected adapters
-		foreach ( $adapters as $adapter ) {
-			$class = get_class( $adapter );
-
-			foreach ( $errors as $error ) {
-				if ( $error['adapter'] === $class ) {
-					if ( method_exists( $adapter, 'apply' ) ) {
-						WP_CLI::log( "Fixing via {$class}..." );
-						$adapter->apply( $blueprint );
-					}
-					break;
-				}
+			foreach ( $messages as $message ) {
+				WP_CLI::log( "  {$message}" );
 			}
 		}
 
-		// 3. Re-validate
+		WP_CLI::log( 'Applying only affected adapters...' );
+
+		foreach ( $adapters as $adapter ) {
+			$class = get_class( $adapter );
+
+			if ( ! isset( $failed_adapters[ $class ] ) ) {
+				WP_CLI::log( "Skipping {$class}" );
+				continue;
+			}
+
+			if ( ! method_exists( $adapter, 'apply' ) ) {
+				continue;
+			}
+
+			WP_CLI::log( "Fixing via {$class}..." );
+			$adapter->apply( $blueprint );
+		}
+
+		flush_rewrite_rules();
+
 		WP_CLI::log( 'Re-validating...' );
 
-		$has_errors = false;
+		$remaining_errors = $this->get_failed_adapters( $adapters, $blueprint );
+
+		if ( empty( $remaining_errors ) ) {
+			WP_CLI::success( 'Fix v2 completed. State is now valid.' );
+			return;
+		}
+
+		WP_CLI::warning( 'Some issues remain after fix:' );
+
+		foreach ( $remaining_errors as $class => $messages ) {
+			WP_CLI::log( "- {$class}" );
+
+			foreach ( $messages as $message ) {
+				WP_CLI::log( "  {$message}" );
+			}
+		}
+	}
+
+	private function get_failed_adapters( array $adapters, array $blueprint ): array {
+		$failed = [];
 
 		foreach ( $adapters as $adapter ) {
 			if ( ! method_exists( $adapter, 'validate' ) ) {
 				continue;
 			}
 
-			$result = $adapter->validate( $blueprint );
+			$class   = get_class( $adapter );
+			$results = $adapter->validate( $blueprint );
 
-			foreach ( $result as $check ) {
-				if ( ( $check['status'] ?? '' ) === 'error' ) {
-					$has_errors = true;
-					WP_CLI::error( $check['message'], false );
+			foreach ( $results as $line ) {
+				if ( ( $line['status'] ?? '' ) !== 'error' ) {
+					continue;
 				}
+
+				if ( ! isset( $failed[ $class ] ) ) {
+					$failed[ $class ] = [];
+				}
+
+				$failed[ $class ][] = $line['message'] ?? 'Unknown error';
 			}
 		}
 
-		if ( ! $has_errors ) {
-			WP_CLI::success( 'Fix completed. State is now valid.' );
-		} else {
-			WP_CLI::warning( 'Some issues remain after fix.' );
-		}
+		return $failed;
 	}
 }
