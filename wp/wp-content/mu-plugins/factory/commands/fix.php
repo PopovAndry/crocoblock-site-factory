@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_Fix_Command {
 
 	public function __invoke(): void {
-		WP_CLI::log( 'Running smart fix v2...' );
+		WP_CLI::log( 'Running smart fix v3...' );
 
 		$blueprint = factory_get_blueprint();
 
@@ -24,22 +24,16 @@ class Factory_Fix_Command {
 			return;
 		}
 
-		WP_CLI::warning( 'Detected broken adapters:' );
+		$this->log_failed_adapters( $failed_adapters );
 
-		foreach ( $failed_adapters as $class => $messages ) {
-			WP_CLI::log( "- {$class}" );
+		$adapters_to_apply = $this->expand_dependencies( array_keys( $failed_adapters ) );
 
-			foreach ( $messages as $message ) {
-				WP_CLI::log( "  {$message}" );
-			}
-		}
-
-		WP_CLI::log( 'Applying only affected adapters...' );
+		WP_CLI::log( 'Applying affected adapters with dependencies...' );
 
 		foreach ( $adapters as $adapter ) {
 			$class = get_class( $adapter );
 
-			if ( ! isset( $failed_adapters[ $class ] ) ) {
+			if ( ! in_array( $class, $adapters_to_apply, true ) ) {
 				WP_CLI::log( "Skipping {$class}" );
 				continue;
 			}
@@ -59,19 +53,12 @@ class Factory_Fix_Command {
 		$remaining_errors = $this->get_failed_adapters( $adapters, $blueprint );
 
 		if ( empty( $remaining_errors ) ) {
-			WP_CLI::success( 'Fix v2 completed. State is now valid.' );
+			WP_CLI::success( 'Fix v3 completed. State is now valid.' );
 			return;
 		}
 
 		WP_CLI::warning( 'Some issues remain after fix:' );
-
-		foreach ( $remaining_errors as $class => $messages ) {
-			WP_CLI::log( "- {$class}" );
-
-			foreach ( $messages as $message ) {
-				WP_CLI::log( "  {$message}" );
-			}
-		}
+		$this->log_failed_adapters( $remaining_errors );
 	}
 
 	private function get_failed_adapters( array $adapters, array $blueprint ): array {
@@ -99,5 +86,60 @@ class Factory_Fix_Command {
 		}
 
 		return $failed;
+	}
+
+	private function expand_dependencies( array $failed_classes ): array {
+		$dependencies = [
+			Factory_Content_Adapter::class => [
+				Factory_Taxonomy_Adapter::class,
+				Factory_WP_Core_Adapter::class,
+				Factory_Content_Adapter::class,
+			],
+
+			Factory_JetEngine_Adapter::class => [
+				Factory_WP_Core_Adapter::class,
+				Factory_JetEngine_Adapter::class,
+			],
+
+			Factory_JetEngine_Listing_Adapter::class => [
+				Factory_WP_Core_Adapter::class,
+				Factory_JetEngine_Adapter::class,
+				Factory_JetEngine_Listing_Adapter::class,
+			],
+
+			Factory_Render_Adapter::class => [
+				Factory_JetEngine_Listing_Adapter::class,
+				Factory_Render_Adapter::class,
+			],
+
+			Factory_Single_Adapter::class => [
+				Factory_WP_Core_Adapter::class,
+				Factory_Single_Adapter::class,
+			],
+		];
+
+		$result = [];
+
+		foreach ( $failed_classes as $class ) {
+			if ( isset( $dependencies[ $class ] ) ) {
+				$result = array_merge( $result, $dependencies[ $class ] );
+			} else {
+				$result[] = $class;
+			}
+		}
+
+		return array_values( array_unique( $result ) );
+	}
+
+	private function log_failed_adapters( array $failed_adapters ): void {
+		WP_CLI::warning( 'Detected broken adapters:' );
+
+		foreach ( $failed_adapters as $class => $messages ) {
+			WP_CLI::log( "- {$class}" );
+
+			foreach ( $messages as $message ) {
+				WP_CLI::log( "  {$message}" );
+			}
+		}
 	}
 }
