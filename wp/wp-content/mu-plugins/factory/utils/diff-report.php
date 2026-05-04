@@ -6,55 +6,57 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Diff_Report {
 
-	private array $report = [];
+	private array $data = [
+		'created' => [],
+		'updated' => [],
+		'skipped' => [],
+		'errors'  => [],
+	];
 
 	public function add( string $type, string $entity, array $diff ): void {
 		if ( empty( $diff ) ) {
+			$this->data['skipped'][] = "{$type}: {$entity}";
 			return;
 		}
 
-		if ( ! isset( $this->report[ $type ] ) ) {
-			$this->report[ $type ] = [];
-		}
-
-		$this->report[ $type ][ $entity ] = $diff;
+		$this->data['updated'][] = "{$type}: {$entity}";
 	}
 
-	public function get(): array {
-		return $this->report;
+	public function created( string $type, string $entity ): void {
+		$this->data['created'][] = "{$type}: {$entity}";
+	}
+
+	public function error( string $type, string $entity, string $message ): void {
+		$this->data['errors'][] = "{$type}: {$entity} → {$message}";
 	}
 
 	public function has_changes(): bool {
-		return ! empty( $this->report );
+		return ! empty( $this->data['created'] )
+			|| ! empty( $this->data['updated'] )
+			|| ! empty( $this->data['errors'] );
 	}
 
-	public function log(): void {
-		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	public function output(): void {
+		if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
+			return;
+		}
 
-			if ( empty( $this->report ) ) {
-				\WP_CLI::log( 'Diff report: no changes' );
-				return;
+		if ( ! $this->has_changes() ) {
+			WP_CLI::success( 'Diff report: no changes' );
+			return;
+		}
+
+		WP_CLI::log( '--- DIFF REPORT ---' );
+
+		foreach ( $this->data as $section => $items ) {
+			if ( empty( $items ) ) {
+				continue;
 			}
 
-			\WP_CLI::log( '--- DIFF REPORT ---' );
+			WP_CLI::log( strtoupper( $section ) . ':' );
 
-			foreach ( $this->report as $type => $entities ) {
-
-				\WP_CLI::log( strtoupper( $type ) );
-
-				foreach ( $entities as $entity => $diff ) {
-
-					\WP_CLI::log( "  {$entity}:" );
-
-					foreach ( $diff as $field => $change ) {
-
-						$action = $change['action'] ?? 'update';
-						$from   = $change['from'] ?? 'null';
-						$to     = $change['to'] ?? 'null';
-
-						\WP_CLI::log( "    {$field}: {$action} ({$from} → {$to})" );
-					}
-				}
+			foreach ( $items as $line ) {
+				WP_CLI::log( "  - {$line}" );
 			}
 		}
 	}

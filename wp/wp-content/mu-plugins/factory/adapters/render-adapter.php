@@ -16,6 +16,79 @@ class Factory_Render_Adapter {
 		}
 	}
 
+	public function plan( array $blueprint ): array {
+	$plan = [];
+
+	foreach ( $blueprint['listings'] ?? [] as $listing ) {
+		$slug      = $listing['slug'] ?? '';
+		$post_type = $listing['post_type'] ?? '';
+
+		if ( ! $slug || ! $post_type ) {
+			continue;
+		}
+
+		$page_config = $this->get_archive_page_config( $post_type );
+
+		$page_slug  = $page_config['slug'] ?? $post_type . 's';
+		$page_title = $page_config['title'] ?? ucwords( str_replace( '-', ' ', $page_slug ) );
+
+		$content = sprintf(
+			'[factory_listing slug="%s"]',
+			esc_attr( $slug )
+		);
+
+		$target_state = [
+			'post_title'   => $page_title,
+			'post_name'    => $page_slug,
+			'post_status'  => 'publish',
+			'post_content' => $content,
+		];
+
+		$existing = get_page_by_path( $page_slug );
+
+		if ( ! $existing ) {
+			$plan[] = [
+				'action'  => 'create',
+				'type'    => 'render',
+				'entity'  => $page_slug,
+				'message' => "Create render page: {$page_slug}",
+			];
+
+			continue;
+		}
+
+		$current_state = [
+			'post_title'   => $existing->post_title,
+			'post_name'    => $existing->post_name,
+			'post_status'  => $existing->post_status,
+			'post_content' => $existing->post_content,
+		];
+
+		$diff = factory_diff_arrays( $current_state, $target_state );
+
+		if ( empty( $diff ) ) {
+			$plan[] = [
+				'action'  => 'skip',
+				'type'    => 'render',
+				'entity'  => $page_slug,
+				'message' => "Render page up-to-date: {$page_slug}",
+			];
+
+			continue;
+		}
+
+		$plan[] = [
+			'action'  => 'update',
+			'type'    => 'render',
+			'entity'  => $page_slug,
+			'message' => "Update render page: {$page_slug}",
+			'diff'    => $diff,
+		];
+	}
+
+	return $plan;
+}
+
 	public function validate( array $blueprint ): array {
 		$checks = [];
 

@@ -19,14 +19,44 @@ class Factory_Dry_Run_Command {
 			WP_CLI::error( 'Invalid blueprint JSON.' );
 		}
 
-		WP_CLI::log( 'Dry run started.' );
+		WP_CLI::log( 'Factory dry-run v2 started.' );
 		WP_CLI::log( "Blueprint: {$path}" );
 		WP_CLI::log( 'No changes will be applied.' );
-		WP_CLI::log( '---' );
+		WP_CLI::log( '--- PLAN ---' );
 
-		$has_errors = false;
+		$has_changes = false;
 
 		foreach ( factory_get_adapters() as $adapter ) {
+
+        if ( method_exists( $adapter, 'plan' ) ) {
+	$class = get_class( $adapter );
+	$plan  = $adapter->plan( $blueprint );
+
+	WP_CLI::log( $class );
+
+	foreach ( $plan as $item ) {
+		$action  = $item['action'] ?? 'unknown';
+		$message = $item['message'] ?? '';
+
+		if ( $action === 'create' ) {
+			$has_changes = true;
+			WP_CLI::log( "  + {$message}" );
+			continue;
+		}
+
+		if ( $action === 'update' ) {
+			$has_changes = true;
+			WP_CLI::log( "  ~ {$message}" );
+			continue;
+		}
+
+		WP_CLI::log( "  = {$message}" );
+	}
+
+	WP_CLI::log( '---' );
+	continue;
+}
+
 			if ( ! method_exists( $adapter, 'validate' ) ) {
 				continue;
 			}
@@ -41,23 +71,27 @@ class Factory_Dry_Run_Command {
 				$message = $line['message'] ?? '';
 
 				if ( $status === 'ok' ) {
-					WP_CLI::log( "  OK: {$message}" );
-				} elseif ( $status === 'warning' ) {
-					WP_CLI::warning( "  WARNING: {$message}" );
-				} else {
-					$has_errors = true;
-					WP_CLI::log( "  WOULD FIX: {$message}" );
+					WP_CLI::log( "  = {$message}" );
+					continue;
 				}
+
+				if ( $status === 'warning' ) {
+					WP_CLI::warning( "  ! {$message}" );
+					continue;
+				}
+
+				$has_changes = true;
+				WP_CLI::log( "  ~ WOULD FIX: {$message}" );
 			}
 
 			WP_CLI::log( '---' );
 		}
 
-		if ( $has_errors ) {
-			WP_CLI::warning( 'Dry run completed. Changes would be required.' );
+		if ( $has_changes ) {
+			WP_CLI::warning( 'Dry-run completed. Changes would be required.' );
 			return;
 		}
 
-		WP_CLI::success( 'Dry run completed. State is already valid.' );
+		WP_CLI::success( 'Dry-run completed. No changes required.' );
 	}
 }

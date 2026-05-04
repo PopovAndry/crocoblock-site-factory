@@ -47,6 +47,64 @@ class Factory_Taxonomy_Adapter {
         }
     }
 
+	public function plan( array $blueprint ): array {
+	$plan = [];
+
+	foreach ( $blueprint['taxonomies'] ?? [] as $taxonomy ) {
+		$slug = $taxonomy['slug'] ?? '';
+
+		if ( ! $slug ) {
+			continue;
+		}
+
+		if ( ! taxonomy_exists( $slug ) ) {
+			$plan[] = [
+				'action'  => 'create',
+				'type'    => 'taxonomy',
+				'entity'  => $slug,
+				'message' => "Create taxonomy: {$slug}",
+			];
+			continue;
+		}
+
+		$plan[] = [
+			'action'  => 'skip',
+			'type'    => 'taxonomy',
+			'entity'  => $slug,
+			'message' => "Taxonomy exists: {$slug}",
+		];
+
+		foreach ( $taxonomy['terms'] ?? [] as $term ) {
+			$name = is_array( $term ) ? ( $term['name'] ?? '' ) : $term;
+
+			if ( ! $name ) {
+				continue;
+			}
+
+			$existing = get_term_by( 'name', $name, $slug );
+
+			if ( ! $existing ) {
+				$plan[] = [
+					'action'  => 'create',
+					'type'    => 'term',
+					'entity'  => "{$slug} → {$name}",
+					'message' => "Create term: {$slug} → {$name}",
+				];
+				continue;
+			}
+
+			$plan[] = [
+				'action'  => 'skip',
+				'type'    => 'term',
+				'entity'  => "{$slug} → {$name}",
+				'message' => "Term exists: {$slug} → {$name}",
+			];
+		}
+	}
+
+	return $plan;
+}
+
 	public function validate( array $blueprint ): array {
 
 		$checks = [];

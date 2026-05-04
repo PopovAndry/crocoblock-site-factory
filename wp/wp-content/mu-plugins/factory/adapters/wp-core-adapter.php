@@ -17,6 +17,65 @@ class Factory_WP_Core_Adapter {
 		$this->register( $blueprint );
 	}
 
+	public function plan( array $blueprint ): array {
+	$plan = [];
+
+	foreach ( $blueprint['cpt'] ?? [] as $cpt ) {
+		$slug = $cpt['slug'] ?? '';
+
+		if ( ! $slug ) {
+			$plan[] = [
+				'action'  => 'error',
+				'type'    => 'cpt',
+				'entity'  => 'unknown',
+				'message' => 'CPT slug is missing.',
+			];
+
+			continue;
+		}
+
+		if ( ! post_type_exists( $slug ) ) {
+			$plan[] = [
+				'action'  => 'create',
+				'type'    => 'cpt',
+				'entity'  => $slug,
+				'message' => "Create CPT: {$slug}",
+			];
+		} else {
+			$plan[] = [
+				'action'  => 'skip',
+				'type'    => 'cpt',
+				'entity'  => $slug,
+				'message' => "CPT up-to-date: {$slug}",
+			];
+		}
+
+		foreach ( $cpt['meta'] ?? [] as $meta ) {
+			$key = $meta['key'] ?? '';
+
+			if ( ! $key ) {
+				$plan[] = [
+					'action'  => 'warning',
+					'type'    => 'meta',
+					'entity'  => $slug,
+					'message' => "Meta key missing for CPT: {$slug}",
+				];
+
+				continue;
+			}
+
+			$plan[] = [
+				'action'  => 'skip',
+				'type'    => 'meta',
+				'entity'  => "{$slug}.{$key}",
+				'message' => "Meta declared: {$slug}.{$key}",
+			];
+		}
+	}
+
+	return $plan;
+}
+
 	public function validate( array $blueprint ): array {
 		$results = [];
 

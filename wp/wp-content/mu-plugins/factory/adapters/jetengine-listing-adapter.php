@@ -21,6 +21,78 @@ class Factory_JetEngine_Listing_Adapter {
 		}
 	}
 
+	public function plan( array $blueprint ): array {
+	$plan = [];
+
+	if ( ! function_exists( 'jet_engine' ) ) {
+		$plan[] = [
+			'action'  => 'warning',
+			'type'    => 'listing',
+			'entity'  => 'JetEngine',
+			'message' => 'JetEngine not active. Listing sync would be skipped.',
+		];
+
+		return $plan;
+	}
+
+	foreach ( $blueprint['listings'] ?? [] as $listing ) {
+		$slug      = $listing['slug'] ?? '';
+		$title     = $listing['title'] ?? $slug;
+		$post_type = $listing['post_type'] ?? '';
+
+		if ( ! $slug || ! $post_type ) {
+			$plan[] = [
+				'action'  => 'error',
+				'type'    => 'listing',
+				'entity'  => $title ?: 'unknown',
+				'message' => 'Listing slug or post_type is missing.',
+			];
+
+			continue;
+		}
+
+		$content  = $this->generate_blocks( $listing );
+		$existing = $this->find_listing_by_slug( $slug );
+
+		$target_state = $this->get_target_listing_state( $listing, $content );
+
+		if ( ! $existing ) {
+			$plan[] = [
+				'action'  => 'create',
+				'type'    => 'listing',
+				'entity'  => $title,
+				'message' => "Create listing: {$title}",
+			];
+
+			continue;
+		}
+
+		$current_state = $this->get_current_listing_state( $existing );
+		$diff          = factory_diff_arrays( $current_state, $target_state );
+
+		if ( empty( $diff ) ) {
+			$plan[] = [
+				'action'  => 'skip',
+				'type'    => 'listing',
+				'entity'  => $title,
+				'message' => "Listing up-to-date: {$title}",
+			];
+
+			continue;
+		}
+
+		$plan[] = [
+			'action'  => 'update',
+			'type'    => 'listing',
+			'entity'  => $title,
+			'message' => "Update listing: {$title}",
+			'diff'    => $diff,
+		];
+	}
+
+	return $plan;
+}
+
 	public function validate( array $blueprint ): array {
 		$checks = [];
 

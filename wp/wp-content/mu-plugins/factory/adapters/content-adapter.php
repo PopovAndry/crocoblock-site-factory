@@ -18,6 +18,59 @@ class Factory_Content_Adapter {
 		}
 	}
 
+    public function plan( array $blueprint ): array {
+	$plan = [];
+
+	foreach ( $blueprint['content'] ?? [] as $post_type => $items ) {
+		foreach ( $items as $item ) {
+			$title = $item['title'] ?? '';
+
+			if ( ! $title ) {
+				continue;
+			}
+
+			$post = $this->find_post( $post_type, $item );
+
+			if ( ! $post ) {
+				$plan[] = [
+					'action'  => 'create',
+					'type'    => 'content',
+					'entity'  => "{$post_type} → {$title}",
+					'message' => "Create missing content item: {$post_type} → {$title}",
+				];
+
+				continue;
+			}
+
+			$current_state = $this->get_current_post_state( $post, $item );
+			$target_state  = $this->get_target_post_state( $item );
+
+			$diff = factory_diff_arrays( $current_state, $target_state );
+
+			if ( empty( $diff ) ) {
+				$plan[] = [
+					'action'  => 'skip',
+					'type'    => 'content',
+					'entity'  => "{$post_type} → {$title}",
+					'message' => "Content up-to-date: {$post_type} → {$title}",
+				];
+
+				continue;
+			}
+
+			$plan[] = [
+				'action'  => 'update',
+				'type'    => 'content',
+				'entity'  => "{$post_type} → {$title}",
+				'message' => "Update content item: {$post_type} → {$title}",
+				'diff'    => $diff,
+			];
+		}
+	}
+
+	return $plan;
+}
+
 	public function validate( array $blueprint ): array {
 		$results = [];
 
@@ -116,7 +169,7 @@ class Factory_Content_Adapter {
 				$this->sync_post_terms( $post_id, $item );
 				$this->log_success( "Created: {$item['title']}" );
 			}
-
+            
 			return;
 		}
 
@@ -149,6 +202,12 @@ class Factory_Content_Adapter {
 			return 0;
 		}
 
+        global $factory_diff_report;
+
+        if ( $factory_diff_report instanceof Factory_Diff_Report ) {
+            $factory_diff_report->created( 'content', $item['title'] );
+        }
+
 		update_post_meta( $post_id, '_factory_source_key', $this->get_source_key( $post_type, $item ) );
 
 		return (int) $post_id;
@@ -167,7 +226,15 @@ class Factory_Content_Adapter {
 			$this->warn( $result->get_error_message() );
 			return;
 		}
+        global $factory_diff_report;
 
+        if ( $factory_diff_report instanceof Factory_Diff_Report ) {
+            $factory_diff_report->add(
+                'content',
+                $item['title'],
+                $diff
+            );
+        }
 		update_post_meta( $post_id, '_factory_source_key', $this->get_source_key( $post_type, $item ) );
 	}
 

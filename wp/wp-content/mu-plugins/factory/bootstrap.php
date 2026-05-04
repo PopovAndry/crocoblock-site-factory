@@ -137,7 +137,7 @@ function factory_log_diff_report(): void {
 	global $factory_diff_report;
 
 	if ( $factory_diff_report instanceof Factory_Diff_Report ) {
-		$factory_diff_report->log();
+		$factory_diff_report->output();
 	}
 }
 
@@ -200,8 +200,11 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		factory_reset_diff_report();
 
 		factory_apply_blueprint( $blueprint );
+		global $factory_diff_report;
 
-		factory_log_diff_report();
+		if ( isset( $factory_diff_report ) ) {
+			$factory_diff_report->output();
+		}
 
 		WP_CLI::success( "Factory blueprint applied: {$path}" );
 	} );

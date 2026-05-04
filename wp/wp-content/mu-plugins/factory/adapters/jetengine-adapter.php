@@ -39,6 +39,96 @@ class Factory_JetEngine_Adapter {
 		$this->log( 'JetEngine meta boxes synced.' );
 	}
 
+	public function plan( array $blueprint ): array {
+	$plan = [];
+
+	if ( ! function_exists( 'jet_engine' ) ) {
+		$plan[] = [
+			'action'  => 'warning',
+			'type'    => 'jetengine',
+			'entity'  => 'JetEngine',
+			'message' => 'JetEngine not active. Meta box sync would be skipped.',
+		];
+
+		return $plan;
+	}
+
+	$boxes = get_option( $this->option_name, [] );
+
+	if ( ! is_array( $boxes ) ) {
+		$boxes = [];
+	}
+
+	$boxes = $this->remove_old_factory_boxes( $boxes );
+
+	foreach ( $blueprint['cpt'] ?? [] as $cpt ) {
+		if ( empty( $cpt['slug'] ) ) {
+			continue;
+		}
+
+		$post_type = $cpt['slug'];
+		$box_id    = $this->get_box_id( $post_type );
+
+		$meta_fields = [];
+
+		foreach ( $cpt['meta'] ?? [] as $meta ) {
+			if ( empty( $meta['key'] ) ) {
+				continue;
+			}
+
+			$meta_fields[] = [
+				'name'        => $meta['key'],
+				'title'       => $meta['label'] ?? $meta['key'],
+				'type'        => $this->map_field_type( $meta['type'] ?? 'text' ),
+				'object_type' => 'field',
+				'width'       => '100%',
+			];
+		}
+
+		$target_state = [
+			'id'          => $box_id,
+			'title'       => 'Factory: ' . ( $cpt['label'] ?? $post_type ),
+			'meta_fields' => $this->normalize_meta_fields_for_diff( $meta_fields ),
+		];
+
+		$current_state = $this->get_current_meta_box_state( $boxes, $box_id );
+
+		if ( empty( $current_state ) ) {
+			$plan[] = [
+				'action'  => 'create',
+				'type'    => 'jetengine',
+				'entity'  => $box_id,
+				'message' => "Create JetEngine meta box: {$box_id}",
+			];
+
+			continue;
+		}
+
+		$diff = factory_diff_arrays( $current_state, $target_state );
+
+		if ( empty( $diff ) ) {
+			$plan[] = [
+				'action'  => 'skip',
+				'type'    => 'jetengine',
+				'entity'  => $box_id,
+				'message' => "JetEngine meta box up-to-date: {$box_id}",
+			];
+
+			continue;
+		}
+
+		$plan[] = [
+			'action'  => 'update',
+			'type'    => 'jetengine',
+			'entity'  => $box_id,
+			'message' => "Update JetEngine meta box: {$box_id}",
+			'diff'    => $diff,
+		];
+	}
+
+	return $plan;
+}
+
 	public function validate( array $blueprint ): array {
 		$checks = [];
 
