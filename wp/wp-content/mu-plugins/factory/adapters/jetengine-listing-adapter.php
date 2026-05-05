@@ -93,34 +93,46 @@ class Factory_JetEngine_Listing_Adapter {
 	return $plan;
 }
 
-	public function validate( array $blueprint ): array {
-		$checks = [];
+public function validate( array $blueprint ): array {
+	$results = [];
 
-		foreach ( $blueprint['listings'] ?? [] as $listing ) {
-			$slug  = $listing['slug'] ?? '';
-			$title = $listing['title'] ?? $slug;
+	foreach ( $blueprint['listings'] ?? [] as $listing ) {
 
-			if ( ! $slug ) {
-				$checks[] = [
-					'status'  => 'error',
-					'message' => 'Listing slug is missing.',
-				];
+		$slug  = $listing['slug'] ?? '';
+		$title = $listing['title'] ?? $slug;
 
-				continue;
-			}
+		$existing = $this->find_listing_by_slug( $slug );
 
-			$post = $this->find_listing_by_slug( $slug );
-
-			$checks[] = [
-				'status'  => $post ? 'ok' : 'error',
-				'message' => $post
-					? "Listing exists: {$title}"
-					: "Listing missing: {$title}",
+		if ( ! $existing ) {
+			$results[] = [
+				'status'  => 'error',
+				'message' => "Listing missing: {$title}",
 			];
+			continue;
 		}
 
-		return $checks;
+		$content       = $this->generate_blocks( $listing );
+		$current_state = $this->get_current_listing_state( $existing );
+		$target_state  = $this->get_target_listing_state( $listing, $content );
+
+		$diff = factory_diff_arrays( $current_state, $target_state );
+
+		if ( ! empty( $diff ) ) {
+			$results[] = [
+				'status'  => 'error',
+				'message' => "Listing out of sync: {$title}",
+			];
+			continue;
+		}
+
+		$results[] = [
+			'status'  => 'ok',
+			'message' => "Listing up-to-date: {$title}",
+		];
 	}
+
+	return $results;
+}
 
 	private function upsert_listing( array $listing ): void {
 		$slug      = $listing['slug'] ?? '';

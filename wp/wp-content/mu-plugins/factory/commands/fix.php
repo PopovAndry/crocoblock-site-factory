@@ -42,6 +42,24 @@ class Factory_Fix_Command {
 				continue;
 			}
 
+			if ( method_exists( $adapter, 'plan' ) ) {
+				$plan = $adapter->plan( $blueprint );
+
+				$needs_apply = false;
+
+				foreach ( $plan as $item ) {
+					if ( in_array( $item['action'] ?? '', [ 'create', 'update' ], true ) ) {
+						$needs_apply = true;
+						break;
+					}
+				}
+
+				if ( ! $needs_apply ) {
+					WP_CLI::log( "Skipping {$class} (dependency only, no changes)" );
+					continue;
+				}
+			}
+
 			WP_CLI::log( "Fixing via {$class}..." );
 			$adapter->apply( $blueprint );
 		}
