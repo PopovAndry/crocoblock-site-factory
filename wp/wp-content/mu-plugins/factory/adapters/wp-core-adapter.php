@@ -156,10 +156,6 @@ class Factory_WP_Core_Adapter {
 
 		$diff = factory_diff_arrays( $current, $target );
 
-		if ( ! empty( $diff ) && defined( 'WP_CLI' ) && WP_CLI ) {
-			WP_CLI::log( "CPT diff detected: {$slug}" );
-		}
-
 		register_post_type( $slug, [
 			'label'              => $cpt['label'] ?? ucfirst( $slug ),
 			'public'             => true,

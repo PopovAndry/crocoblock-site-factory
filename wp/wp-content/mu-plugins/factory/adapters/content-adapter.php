@@ -18,7 +18,7 @@ class Factory_Content_Adapter {
 		}
 	}
 
-    public function plan( array $blueprint ): array {
+public function plan( array $blueprint ): array {
 	$plan = [];
 
 	foreach ( $blueprint['content'] ?? [] as $post_type => $items ) {
@@ -36,7 +36,7 @@ class Factory_Content_Adapter {
 					'action'  => 'create',
 					'type'    => 'content',
 					'entity'  => "{$post_type} → {$title}",
-					'message' => "Create missing content item: {$post_type} → {$title}",
+					'message' => "Create content item: {$post_type} → {$title}",
 				];
 
 				continue;

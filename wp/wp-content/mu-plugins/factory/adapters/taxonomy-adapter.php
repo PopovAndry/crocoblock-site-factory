@@ -205,9 +205,9 @@ private function get_current_terms_state( string $taxonomy ): array {
 
         if ( empty( $current ) || ! empty( $diff ) ) {
 
-            if ( defined('WP_CLI') && WP_CLI ) {
-                WP_CLI::log("Applying taxonomy: {$slug}");
-            }
+            // if ( defined('WP_CLI') && WP_CLI ) {
+            //     WP_CLI::log("Applying taxonomy: {$slug}");
+            // }
 
             register_taxonomy( $slug, $post_type, [
                 'label'        => $label,
