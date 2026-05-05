@@ -35,6 +35,7 @@ class Factory_Dry_Run_Command {
 	}
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
+		$diff_mode = $assoc_args['diff'] ?? 'short';
 		$only_changes = isset( $assoc_args['only-changes'] );
 		$only         = $assoc_args['only'] ?? null;
 
@@ -140,15 +141,37 @@ class Factory_Dry_Run_Command {
 				if ( ! $is_json ) {
 					WP_CLI::log( '  ' . $this->format_action( $action ) . ' ' . $message );
 
-					if ( isset( $item['diff'] ) && is_array( $item['diff'] ) ) {
-						foreach ( $item['diff'] as $key => $change ) {
-							if ( is_array( $change ) && isset( $change['old'], $change['new'] ) ) {
-								WP_CLI::log( "      - {$key}: {$change['old']} → {$change['new']}" );
-							} else {
-								WP_CLI::log( "      - {$key} changed" );
+				if ( isset( $item['diff'] ) && is_array( $item['diff'] ) ) {
+
+					foreach ( $item['diff'] as $key => $change ) {
+
+						if ( $diff_mode === 'short' ) {
+							WP_CLI::log( "      - {$key} changed" );
+							continue;
+						}
+
+						// FULL mode
+						if ( is_array( $change ) ) {
+
+							if ( isset( $change['old'], $change['new'] ) ) {
+								$old = is_scalar( $change['old'] ) ? $change['old'] : '[complex]';
+								$new = is_scalar( $change['new'] ) ? $change['new'] : '[complex]';
+
+								WP_CLI::log( "      - {$key}:" );
+								WP_CLI::log( "          old: {$old}" );
+								WP_CLI::log( "          new: {$new}" );
+								continue;
+							}
+
+							if ( isset( $change['value'] ) ) {
+								WP_CLI::log( "      - {$key} (new value)" );
+								continue;
 							}
 						}
+
+						WP_CLI::log( "      - {$key} changed" );
 					}
+				}
 				}
 			}
 
