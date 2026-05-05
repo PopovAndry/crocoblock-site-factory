@@ -6,8 +6,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Dry_Run_Command {
 
-	public function __invoke( array $args ): void {
-		$path = $args[0] ?? FACTORY_BLUEPRINT_PATH;
+	public function __invoke( array $args = [], array $assoc_args = [] ): void {
+
+		$path   = $args[0] ?? FACTORY_BLUEPRINT_PATH;
+		$format = $assoc_args['format'] ?? 'table';
+		$is_json = $format === 'json';
 
 		if ( ! file_exists( $path ) ) {
 			WP_CLI::error( "Blueprint file not found: {$path}" );
@@ -27,11 +30,15 @@ class Factory_Dry_Run_Command {
 			'error'   => 0,
 		];
 
-		WP_CLI::log( '' );
-		WP_CLI::log( 'Factory plan' );
-		WP_CLI::log( 'Blueprint: ' . $path );
-		WP_CLI::log( 'No changes will be applied.' );
-		WP_CLI::log( '' );
+		$all_items = [];
+
+		if ( ! $is_json ) {
+			WP_CLI::log( '' );
+			WP_CLI::log( 'Factory plan' );
+			WP_CLI::log( 'Blueprint: ' . $path );
+			WP_CLI::log( 'No changes will be applied.' );
+			WP_CLI::log( '' );
+		}
 
 		foreach ( factory_get_adapters() as $adapter ) {
 			$class = get_class( $adapter );
@@ -48,31 +55,54 @@ class Factory_Dry_Run_Command {
 				continue;
 			}
 
-			WP_CLI::log( $this->format_adapter_name( $class ) );
+			if ( ! $is_json ) {
+				WP_CLI::log( $this->format_adapter_name( $class ) );
+			}
 
 			foreach ( $items as $item ) {
 				$action  = $item['action'] ?? 'skip';
 				$message = $item['message'] ?? '';
 
+				$all_items[] = [
+					'adapter' => $this->format_adapter_name( $class ),
+					'action'  => $action,
+					'message' => $message,
+					'diff'    => $item['diff'] ?? [],
+				];
+
 				$summary[ $action ] = ( $summary[ $action ] ?? 0 ) + 1;
 
-				WP_CLI::log( '  ' . $this->format_action( $action ) . ' ' . $message );
+				if ( ! $is_json ) {
 
-                if ( isset( $item['diff'] ) && is_array( $item['diff'] ) ) {
-                    foreach ( $item['diff'] as $key => $change ) {
-                        if ( is_array( $change ) && isset( $change['old'], $change['new'] ) ) {
-                            WP_CLI::log( "      - {$key}: {$change['old']} → {$change['new']}" );
-                        } else {
-                            WP_CLI::log( "      - {$key} changed" );
-                        }
-                    }
-                }
+					WP_CLI::log( '  ' . $this->format_action( $action ) . ' ' . $message );
+
+					if ( isset( $item['diff'] ) && is_array( $item['diff'] ) ) {
+						foreach ( $item['diff'] as $key => $change ) {
+							if ( is_array( $change ) && isset( $change['old'], $change['new'] ) ) {
+								WP_CLI::log( "      - {$key}: {$change['old']} → {$change['new']}" );
+							} else {
+								WP_CLI::log( "      - {$key} changed" );
+							}
+						}
+					}
+				}
 			}
 
-			WP_CLI::log( '' );
-
+			if ( ! $is_json ) {
+				WP_CLI::log( '' );
+			}
 		}
 
+		// 👉 JSON режим
+		if ( $is_json ) {
+			WP_CLI::line( json_encode( [
+				'summary' => $summary,
+				'items'   => $all_items,
+			], JSON_PRETTY_PRINT ) );
+			return;
+		}
+
+		// 👉 CLI режим
 		WP_CLI::log( 'Summary:' );
 		WP_CLI::log( "  + {$summary['create']} to create" );
 		WP_CLI::log( "  ~ {$summary['update']} to update" );
@@ -120,18 +150,18 @@ class Factory_Dry_Run_Command {
 		};
 	}
 
-    private function format_adapter_name( string $class ): string {
-	return match ( $class ) {
-		'Factory_Plugin_Adapter'             => 'Plugins',
-		'Factory_Theme_Adapter'              => 'Theme',
-		'Factory_Taxonomy_Adapter'           => 'Taxonomies',
-		'Factory_WP_Core_Adapter'            => 'WordPress Core',
-		'Factory_JetEngine_Adapter'          => 'JetEngine Meta',
-		'Factory_JetEngine_Listing_Adapter'  => 'JetEngine Listings',
-		'Factory_Render_Adapter'             => 'Render Pages',
-		'Factory_Single_Adapter'             => 'Single Templates',
-		'Factory_Content_Adapter'            => 'Content',
-		default                              => $class,
-	};
-}
+	private function format_adapter_name( string $class ): string {
+		return match ( $class ) {
+			'Factory_Plugin_Adapter'             => 'Plugins',
+			'Factory_Theme_Adapter'              => 'Theme',
+			'Factory_Taxonomy_Adapter'           => 'Taxonomies',
+			'Factory_WP_Core_Adapter'            => 'WordPress Core',
+			'Factory_JetEngine_Adapter'          => 'JetEngine Meta',
+			'Factory_JetEngine_Listing_Adapter'  => 'JetEngine Listings',
+			'Factory_Render_Adapter'             => 'Render Pages',
+			'Factory_Single_Adapter'             => 'Single Templates',
+			'Factory_Content_Adapter'            => 'Content',
+			default                              => $class,
+		};
+	}
 }
