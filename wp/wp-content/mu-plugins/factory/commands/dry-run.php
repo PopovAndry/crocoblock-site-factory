@@ -6,11 +6,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Dry_Run_Command {
 
-	public function __invoke( array $args = [], array $assoc_args = [] ): void {
+	public function get_plan_items( array $blueprint ): array {
+		$all_items = [];
 
-		$path   = $args[0] ?? FACTORY_BLUEPRINT_PATH;
-		$format = $assoc_args['format'] ?? 'table';
-		$is_json = $format === 'json';
+		foreach ( factory_get_adapters() as $adapter ) {
+			$class = get_class( $adapter );
+
+			if ( method_exists( $adapter, 'plan' ) ) {
+				$items = $adapter->plan( $blueprint );
+			} elseif ( method_exists( $adapter, 'validate' ) ) {
+				$items = $this->convert_validate_to_plan( $adapter->validate( $blueprint ) );
+			} else {
+				continue;
+			}
+
+			foreach ( $items as $item ) {
+				$all_items[] = [
+					'adapter_class' => $class,
+					'adapter'       => $this->format_adapter_name( $class ),
+					'action'        => $item['action'] ?? 'skip',
+					'message'       => $item['message'] ?? '',
+					'diff'          => $item['diff'] ?? [],
+				];
+			}
+		}
+
+		return $all_items;
+	}
+
+	public function __invoke( array $args = [], array $assoc_args = [] ): void {
+		$only_changes = isset( $assoc_args['only-changes'] );
+		$path         = $args[0] ?? FACTORY_BLUEPRINT_PATH;
+		$format       = $assoc_args['format'] ?? 'table';
+		$is_json      = $format === 'json';
 
 		if ( ! file_exists( $path ) ) {
 			WP_CLI::error( "Blueprint file not found: {$path}" );
@@ -55,25 +83,40 @@ class Factory_Dry_Run_Command {
 				continue;
 			}
 
+			$visible_items = [];
+
+			foreach ( $items as $item ) {
+				$action    = $item['action'] ?? 'skip';
+				$message   = $item['message'] ?? '';
+				$is_change = in_array( $action, [ 'create', 'update', 'error', 'warning' ], true );
+
+				$summary[ $action ] = ( $summary[ $action ] ?? 0 ) + 1;
+
+				if ( ! $only_changes || $is_change ) {
+					$visible_items[] = $item;
+
+					$all_items[] = [
+						'adapter' => $this->format_adapter_name( $class ),
+						'action'  => $action,
+						'message' => $message,
+						'diff'    => $item['diff'] ?? [],
+					];
+				}
+			}
+
+			if ( empty( $visible_items ) ) {
+				continue;
+			}
+
 			if ( ! $is_json ) {
 				WP_CLI::log( $this->format_adapter_name( $class ) );
 			}
 
-			foreach ( $items as $item ) {
+			foreach ( $visible_items as $item ) {
 				$action  = $item['action'] ?? 'skip';
 				$message = $item['message'] ?? '';
 
-				$all_items[] = [
-					'adapter' => $this->format_adapter_name( $class ),
-					'action'  => $action,
-					'message' => $message,
-					'diff'    => $item['diff'] ?? [],
-				];
-
-				$summary[ $action ] = ( $summary[ $action ] ?? 0 ) + 1;
-
 				if ( ! $is_json ) {
-
 					WP_CLI::log( '  ' . $this->format_action( $action ) . ' ' . $message );
 
 					if ( isset( $item['diff'] ) && is_array( $item['diff'] ) ) {
@@ -93,7 +136,6 @@ class Factory_Dry_Run_Command {
 			}
 		}
 
-		// 👉 JSON режим
 		if ( $is_json ) {
 			WP_CLI::line( json_encode( [
 				'summary' => $summary,
@@ -102,7 +144,6 @@ class Factory_Dry_Run_Command {
 			return;
 		}
 
-		// 👉 CLI режим
 		WP_CLI::log( 'Summary:' );
 		WP_CLI::log( "  + {$summary['create']} to create" );
 		WP_CLI::log( "  ~ {$summary['update']} to update" );
