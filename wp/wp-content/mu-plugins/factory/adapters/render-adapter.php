@@ -90,29 +90,58 @@ class Factory_Render_Adapter {
 }
 
 	public function validate( array $blueprint ): array {
-		$checks = [];
+		$results = [];
 
-		foreach ( $blueprint['listings'] ?? [] as $listing ) {
-			$post_type = $listing['post_type'] ?? '';
+		$page = $blueprint['pages']['archive'] ?? null;
 
-			if ( ! $post_type ) {
-				continue;
-			}
-
-			$page_config = $this->get_archive_page_config( $post_type );
-
-			$page_slug = $page_config['slug'] ?? $post_type . 's';
-			$page      = get_page_by_path( $page_slug );
-
-			$checks[] = [
-				'status'  => $page ? 'ok' : 'error',
-				'message' => $page
-					? "Render page exists: {$page_slug}"
-					: "Render page missing: {$page_slug}",
-			];
+		if ( ! $page ) {
+			return $results;
 		}
 
-		return $checks;
+		$slug  = $page['slug'] ?? '';
+		$title = $page['title'] ?? $slug;
+
+		$existing = get_page_by_path( $slug );
+
+		if ( ! $existing ) {
+			$results[] = [
+				'status'  => 'error',
+				'message' => "Render page missing: {$title}",
+			];
+			return $results;
+		}
+
+			$target_content = sprintf(
+				'[factory_listing slug="%s"]',
+				esc_attr( $this->get_listing_slug_for_post_type( $blueprint, $page['post_type'] ?? '' ) )
+			);
+
+		$current_state = [
+			'post_title'   => $existing->post_title,
+			'post_content' => $existing->post_content,
+		];
+
+		$target_state = [
+			'post_title'   => $title,
+			'post_content' => $target_content,
+		];
+
+		$diff = factory_diff_arrays( $current_state, $target_state );
+
+		if ( ! empty( $diff ) ) {
+			$results[] = [
+				'status'  => 'error',
+				'message' => "Render page out of sync: {$title}",
+			];
+			return $results;
+		}
+
+		$results[] = [
+			'status'  => 'ok',
+			'message' => "Render page up-to-date: {$title}",
+		];
+
+		return $results;
 	}
 
 	private function upsert_listing_page( array $listing ): void {
@@ -308,5 +337,15 @@ class Factory_Render_Adapter {
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			WP_CLI::log( $message );
 		}
+	}
+
+		private function get_listing_slug_for_post_type( array $blueprint, string $post_type ): string {
+		foreach ( $blueprint['listings'] ?? [] as $listing ) {
+			if ( ( $listing['post_type'] ?? '' ) === $post_type ) {
+				return $listing['slug'] ?? '';
+			}
+		}
+
+		return '';
 	}
 }
