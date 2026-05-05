@@ -7,7 +7,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_Fix_Command {
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
-		WP_CLI::log( 'Running smart fix v4 (plan-based)...' );
+		$is_dry_run = isset( $assoc_args['dry-run'] );
+
+		WP_CLI::log(
+			$is_dry_run
+				? 'Running smart fix v4 dry-run (plan-based)...'
+				: 'Running smart fix v4 (plan-based)...'
+		);
 
 		$blueprint = factory_get_blueprint();
 
@@ -76,7 +82,11 @@ class Factory_Fix_Command {
 
 		$adapters_to_apply = $this->expand_dependencies( array_unique( $changed_adapter_classes ) );
 
-		WP_CLI::log( 'Applying affected adapters with dependencies...' );
+		WP_CLI::log(
+			$is_dry_run
+				? 'Dry-run: affected adapters with dependencies:'
+				: 'Applying affected adapters with dependencies...'
+		);
 
 		foreach ( $adapters as $adapter ) {
 			$class = get_class( $adapter );
@@ -107,8 +117,18 @@ class Factory_Fix_Command {
 				}
 			}
 
+			if ( $is_dry_run ) {
+				WP_CLI::log( "Would fix via {$class}" );
+				continue;
+			}
+
 			WP_CLI::log( "Fixing via {$class}..." );
 			$adapter->apply( $blueprint );
+		}
+
+		if ( $is_dry_run ) {
+			WP_CLI::warning( 'Dry-run completed. No changes were applied.' );
+			return;
 		}
 
 		flush_rewrite_rules();
