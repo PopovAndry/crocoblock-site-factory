@@ -36,7 +36,25 @@ class Factory_Dry_Run_Command {
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
 		$only_changes = isset( $assoc_args['only-changes'] );
-		$path         = $args[0] ?? FACTORY_BLUEPRINT_PATH;
+		$only         = $assoc_args['only'] ?? null;
+
+		$only_map = [
+			'plugins'  => Factory_Plugin_Adapter::class,
+			'theme'    => Factory_Theme_Adapter::class,
+			'taxonomy' => Factory_Taxonomy_Adapter::class,
+			'core'     => Factory_WP_Core_Adapter::class,
+			'meta'     => Factory_JetEngine_Adapter::class,
+			'listings' => Factory_JetEngine_Listing_Adapter::class,
+			'render'   => Factory_Render_Adapter::class,
+			'single'   => Factory_Single_Adapter::class,
+			'content'  => Factory_Content_Adapter::class,
+		];
+
+		if ( $only && isset( $only_map[ $only ] ) ) {
+			$only = $only_map[ $only ];
+		}
+
+		$path   = $args[0] ?? FACTORY_BLUEPRINT_PATH;
 		$format       = $assoc_args['format'] ?? 'table';
 		$is_json      = $format === 'json';
 
@@ -70,6 +88,9 @@ class Factory_Dry_Run_Command {
 
 		foreach ( factory_get_adapters() as $adapter ) {
 			$class = get_class( $adapter );
+			if ( $only && $class !== $only ) {
+			continue;
+		}
 
 			if ( method_exists( $adapter, 'plan' ) ) {
 				$items = $adapter->plan( $blueprint );
