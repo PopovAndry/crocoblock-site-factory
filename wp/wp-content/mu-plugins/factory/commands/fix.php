@@ -6,13 +6,31 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Fix_Command {
 
-	public function __invoke(): void {
+	public function __invoke( array $args = [], array $assoc_args = [] ): void {
 		WP_CLI::log( 'Running smart fix v4 (plan-based)...' );
 
 		$blueprint = factory_get_blueprint();
 
 		if ( empty( $blueprint ) ) {
 			WP_CLI::error( 'Blueprint not found.' );
+		}
+
+		$only = $assoc_args['only'] ?? null;
+
+		$only_map = [
+			'plugins'  => Factory_Plugin_Adapter::class,
+			'theme'    => Factory_Theme_Adapter::class,
+			'taxonomy' => Factory_Taxonomy_Adapter::class,
+			'core'     => Factory_WP_Core_Adapter::class,
+			'meta'     => Factory_JetEngine_Adapter::class,
+			'listings' => Factory_JetEngine_Listing_Adapter::class,
+			'render'   => Factory_Render_Adapter::class,
+			'single'   => Factory_Single_Adapter::class,
+			'content'  => Factory_Content_Adapter::class,
+		];
+
+		if ( $only && isset( $only_map[ $only ] ) ) {
+			$only = $only_map[ $only ];
 		}
 
 		$adapters = factory_get_adapters();
@@ -23,13 +41,26 @@ class Factory_Fix_Command {
 		$changes = [];
 
 		foreach ( $plan_items as $item ) {
-			if ( in_array( $item['action'] ?? '', [ 'create', 'update', 'error' ], true ) ) {
-				$changes[] = $item;
+			$is_change = in_array( $item['action'] ?? '', [ 'create', 'update', 'error' ], true );
+
+			if ( ! $is_change ) {
+				continue;
 			}
+
+			if ( $only && ( $item['adapter_class'] ?? '' ) !== $only ) {
+				continue;
+			}
+
+			$changes[] = $item;
 		}
 
 		if ( empty( $changes ) ) {
-			WP_CLI::success( 'Nothing to fix. State is valid.' );
+			if ( $only ) {
+				WP_CLI::success( "Nothing to fix for: {$only}" );
+			} else {
+				WP_CLI::success( 'Nothing to fix. State is valid.' );
+			}
+
 			return;
 		}
 
