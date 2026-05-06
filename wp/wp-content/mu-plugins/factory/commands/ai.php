@@ -1,0 +1,195 @@
+<?php
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+class Factory_AI_Command {
+
+	public function __invoke( array $args = [], array $assoc_args = [] ): void {
+		$prompt = implode( ' ', $args );
+
+		if ( empty( $prompt ) ) {
+			WP_CLI::error( 'Please provide a prompt.' );
+		}
+
+		WP_CLI::log( 'Generating blueprint via AI...' );
+
+		$api_key = getenv( 'OPENAI_API_KEY' );
+
+		if ( ! $api_key ) {
+			WP_CLI::error( 'OPENAI_API_KEY not set.' );
+		}
+
+		$system_prompt = <<<SYS
+You generate WordPress blueprints for Crocoblock Site Factory.
+
+Return ONLY valid JSON. No markdown. No explanation.
+
+The blueprint must follow this structure:
+
+{
+  "version": "0.2",
+  "site": {
+    "name": "Site name",
+    "language": "en",
+    "permalink": "/%postname%/"
+  },
+  "cpt": [
+    {
+      "slug": "job",
+      "label": "Jobs",
+      "singular": "Job",
+      "supports": ["title", "editor"],
+      "meta": [
+        { "key": "salary", "type": "number", "label": "Salary" },
+        { "key": "location", "type": "text", "label": "Location" }
+      ]
+    }
+  ],
+  "taxonomies": [
+    {
+      "slug": "job_type",
+      "label": "Job Types",
+      "singular": "Job Type",
+      "post_type": "job",
+      "terms": ["Full-time", "Part-time", "Remote"]
+    }
+  ],
+  "listings": [
+    {
+      "slug": "job-card",
+      "title": "Job Card",
+      "post_type": "job",
+      "fields": ["title", "salary", "location"]
+    }
+  ],
+  "pages": {
+    "archive": {
+      "post_type": "job",
+      "slug": "jobs",
+      "title": "Jobs"
+    }
+  },
+  "content": {
+    "job": [
+      {
+        "title": "Frontend Developer",
+        "content": "We are looking for a frontend developer.",
+        "meta": {
+          "salary": 3000,
+          "location": "Berlin"
+        },
+        "terms": {
+          "job_type": ["Full-time"]
+        }
+      },
+      {
+        "title": "Backend Developer",
+        "content": "We are looking for a backend developer.",
+        "meta": {
+          "salary": 4000,
+          "location": "Munich"
+        },
+        "terms": {
+          "job_type": ["Full-time"]
+        }
+      }
+    ]
+  }
+}
+
+Rules:
+- Use lowercase slugs.
+- Use snake_case for meta keys and taxonomy slugs.
+- Always include site, cpt, content.
+- If the site needs archive output, include pages.archive.
+- If the site uses repeatable cards, include listings.
+- If content has categories or types, include taxonomies and terms.
+Hard requirements:
+- Never return empty content arrays.
+- For every CPT, generate at least 2 demo content items.
+- Every content item must include title, content, meta values for all declared meta fields.
+- If taxonomies are defined, every content item must include matching terms.
+- Always include listings for each CPT.
+- Always include pages.archive for the main CPT.
+- For job board requests, include job_type taxonomy with Full-time, Part-time, Remote terms.
+- For job board requests, include at least Frontend Developer and Backend Developer demo jobs.
+SYS;
+
+		$payload = [
+			'model'       => 'gpt-4.1-mini',
+			'messages'    => [
+				[
+					'role'    => 'system',
+					'content' => $system_prompt,
+				],
+				[
+					'role'    => 'user',
+					'content' => $prompt,
+				],
+			],
+			'temperature' => 0.2,
+		];
+
+		$response = wp_remote_post(
+			'https://api.openai.com/v1/chat/completions',
+			[
+				'headers' => [
+					'Authorization' => 'Bearer ' . $api_key,
+					'Content-Type'  => 'application/json',
+				],
+				'body'    => json_encode( $payload ),
+				'timeout' => 60,
+			]
+		);
+
+		if ( is_wp_error( $response ) ) {
+			WP_CLI::error( $response->get_error_message() );
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		$raw_body    = wp_remote_retrieve_body( $response );
+		$body        = json_decode( $raw_body, true );
+
+		if ( $status_code < 200 || $status_code >= 300 ) {
+			$message = $body['error']['message'] ?? $raw_body;
+			WP_CLI::error( "OpenAI API error: {$message}" );
+		}
+
+		$content = $body['choices'][0]['message']['content'] ?? '';
+
+		if ( ! $content ) {
+			WP_CLI::error( 'Empty response from AI.' );
+		}
+
+		$blueprint = json_decode( $content, true );
+
+		if ( ! is_array( $blueprint ) ) {
+			WP_CLI::log( 'Raw AI response:' );
+			WP_CLI::log( $content );
+			WP_CLI::error( 'Invalid JSON returned from AI.' );
+		}
+
+		$path = '/var/www/blueprints/generated/ai-blueprint.json';
+
+		file_put_contents(
+			$path,
+			json_encode( $blueprint, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE )
+		);
+
+		WP_CLI::success( "Blueprint saved: {$path}" );
+
+		WP_CLI::log( 'Applying blueprint...' );
+
+		factory_reset_diff_report();
+		factory_apply_blueprint( $blueprint );
+		factory_log_diff_report();
+
+		WP_CLI::success( "Factory AI blueprint applied: {$path}" );
+
+		WP_CLI::log( 'Next checks:' );
+		WP_CLI::log( "wp factory dry-run {$path}" );
+		WP_CLI::log( 'wp factory validate' );
+	}
+}

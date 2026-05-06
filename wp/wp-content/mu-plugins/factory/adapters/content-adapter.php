@@ -202,12 +202,6 @@ public function plan( array $blueprint ): array {
 			return 0;
 		}
 
-        global $factory_diff_report;
-
-        if ( $factory_diff_report instanceof Factory_Diff_Report ) {
-            $factory_diff_report->created( 'content', $item['title'] );
-        }
-
 		update_post_meta( $post_id, '_factory_source_key', $this->get_source_key( $post_type, $item ) );
 
 		return (int) $post_id;
@@ -226,15 +220,6 @@ public function plan( array $blueprint ): array {
 			$this->warn( $result->get_error_message() );
 			return;
 		}
-        global $factory_diff_report;
-
-        if ( $factory_diff_report instanceof Factory_Diff_Report ) {
-            $factory_diff_report->add(
-                'content',
-                $item['title'],
-                $diff
-            );
-        }
 		update_post_meta( $post_id, '_factory_source_key', $this->get_source_key( $post_type, $item ) );
 	}
 

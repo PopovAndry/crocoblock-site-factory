@@ -23,6 +23,7 @@ require_once __DIR__ . '/blueprint/blueprint-preset-manager.php';
 require_once __DIR__ . '/ai/blueprint-generator.php';
 require_once __DIR__ . '/commands/fix.php';
 require_once __DIR__ . '/commands/dry-run.php';
+require_once __DIR__ . '/commands/ai.php';
 
 function factory_get_blueprint(): array {
 	$blueprint = get_option( FACTORY_BLUEPRINT_OPTION );
@@ -143,30 +144,8 @@ function factory_log_diff_report(): void {
 
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	WP_CLI::add_command( 'factory fix', Factory_Fix_Command::class );
-}
-
-if ( defined( 'WP_CLI' ) && WP_CLI ) {
-
-	// 🔥 AI
-	WP_CLI::add_command( 'factory ai', function ( $args ) {
-		$prompt = $args[0] ?? '';
-
-		if ( ! $prompt ) {
-			WP_CLI::error( 'Provide prompt.' );
-		}
-
-		try {
-			$generator = new Factory_AI_Blueprint_Generator();
-
-			$generator->generate_from_prompt( $prompt );
-
-			WP_CLI::success( 'AI blueprint generated.' );
-			WP_CLI::log( 'Saved to: ' . $generator->get_target_path() );
-			WP_CLI::log( 'Next: wp factory apply ' . $generator->get_target_path() );
-		} catch ( Throwable $e ) {
-			WP_CLI::error( $e->getMessage() );
-		}
-	} );
+	WP_CLI::add_command( 'factory dry-run', Factory_Dry_Run_Command::class );
+	WP_CLI::add_command( 'factory ai', Factory_AI_Command::class );
 
 	// MOCK
 	WP_CLI::add_command( 'factory generate', function () {
@@ -200,6 +179,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		factory_reset_diff_report();
 
 		factory_apply_blueprint( $blueprint );
+
 		global $factory_diff_report;
 
 		if ( isset( $factory_diff_report ) ) {
@@ -274,87 +254,84 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 
 		WP_CLI::success( 'Factory reset complete.' );
 	} );
-	WP_CLI::add_command( 'factory dry-run', Factory_Dry_Run_Command::class );
-
-
 
 	WP_CLI::add_command( 'factory preset', function ( $args ) {
-	$preset = $args[0] ?? '';
+		$preset = $args[0] ?? '';
 
-	if ( ! $preset ) {
-		WP_CLI::error( 'Provide preset slug.' );
-	}
+		if ( ! $preset ) {
+			WP_CLI::error( 'Provide preset slug.' );
+		}
 
-	try {
-		$manager   = new Factory_Blueprint_Preset_Manager();
-		$blueprint = $manager->load_preset( $preset );
-		$path      = $manager->save_generated( $preset, $blueprint );
+		try {
+			$manager   = new Factory_Blueprint_Preset_Manager();
+			$blueprint = $manager->load_preset( $preset );
+			$path      = $manager->save_generated( $preset, $blueprint );
 
-		WP_CLI::success( "Preset generated: {$preset}" );
-		WP_CLI::log( "Saved to: {$path}" );
-		WP_CLI::log( "Next: wp factory apply {$path}" );
-	} catch ( Throwable $e ) {
-		WP_CLI::error( $e->getMessage() );
-	}
+			WP_CLI::success( "Preset generated: {$preset}" );
+			WP_CLI::log( "Saved to: {$path}" );
+			WP_CLI::log( "Next: wp factory apply {$path}" );
+		} catch ( Throwable $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
 	} );
 
 	WP_CLI::add_command( 'factory build', function ( $args ) {
-	$prompt = $args[0] ?? '';
+		$prompt = $args[0] ?? '';
 
-	if ( ! $prompt ) {
-		WP_CLI::error( 'Provide prompt.' );
-	}
-
-	try {
-		WP_CLI::log( 'Generating blueprint...' );
-
-		$generator = new Factory_AI_Blueprint_Generator();
-		$blueprint = $generator->generate_from_prompt( $prompt );
-
-		if ( $generator->was_loaded_from_cache() ) {
-			WP_CLI::log( 'Blueprint loaded from cache.' );
-		} else {
-			WP_CLI::log( 'Blueprint generated via AI and saved to cache.' );
+		if ( ! $prompt ) {
+			WP_CLI::error( 'Provide prompt.' );
 		}
 
-		WP_CLI::log( 'Applying blueprint...' );
+		try {
+			WP_CLI::log( 'Generating blueprint...' );
 
-		factory_reset_diff_report();
+			$generator = new Factory_AI_Blueprint_Generator();
+			$blueprint = $generator->generate_from_prompt( $prompt );
 
-		factory_apply_blueprint( $blueprint );
+			if ( $generator->was_loaded_from_cache() ) {
+				WP_CLI::log( 'Blueprint loaded from cache.' );
+			} else {
+				WP_CLI::log( 'Blueprint generated via AI and saved to cache.' );
+			}
 
-		factory_log_diff_report();
+			WP_CLI::log( 'Applying blueprint...' );
 
-		WP_CLI::log( 'Validating...' );
+			factory_reset_diff_report();
 
-		$report = factory_validate_blueprint_state( $blueprint );
+			factory_apply_blueprint( $blueprint );
 
-		if ( ( $report['status'] ?? 'error' ) === 'ok' ) {
-			WP_CLI::success( 'Build complete. State is valid.' );
-			return;
+			factory_log_diff_report();
+
+			WP_CLI::log( 'Validating...' );
+
+			$report = factory_validate_blueprint_state( $blueprint );
+
+			if ( ( $report['status'] ?? 'error' ) === 'ok' ) {
+				WP_CLI::success( 'Build complete. State is valid.' );
+				return;
+			}
+
+			WP_CLI::warning( 'Validation failed. Running deterministic fix...' );
+
+			foreach ( factory_get_adapters() as $adapter ) {
+				$adapter->apply( $blueprint );
+			}
+
+			flush_rewrite_rules();
+
+			WP_CLI::log( 'Re-validating after fix...' );
+
+			$second_report = factory_validate_blueprint_state( $blueprint );
+
+			if ( ( $second_report['status'] ?? 'error' ) === 'ok' ) {
+				WP_CLI::success( 'Build complete after fix. State is valid.' );
+				return;
+			}
+
+			WP_CLI::error( 'Build finished, but validation still has errors.' );
+
+		} catch ( Throwable $e ) {
+			WP_CLI::error( $e->getMessage() );
 		}
-
-		WP_CLI::warning( 'Validation failed. Running deterministic fix...' );
-
-		foreach ( factory_get_adapters() as $adapter ) {
-			$adapter->apply( $blueprint );
-		}
-
-		flush_rewrite_rules();
-
-		WP_CLI::log( 'Re-validating after fix...' );
-
-		$second_report = factory_validate_blueprint_state( $blueprint );
-
-		if ( ( $second_report['status'] ?? 'error' ) === 'ok' ) {
-			WP_CLI::success( 'Build complete after fix. State is valid.' );
-			return;
-		}
-
-		WP_CLI::error( 'Build finished, but validation still has errors.' );
-
-	} catch ( Throwable $e ) {
-		WP_CLI::error( $e->getMessage() );
-	}
-} );
+	} );
 }
