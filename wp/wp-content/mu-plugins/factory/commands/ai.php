@@ -7,8 +7,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_AI_Command {
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
-		$no_cache    = isset( $assoc_args['no-cache'] );
-		$debug_cache = isset( $assoc_args['debug-cache'] );
+	$cache_enabled = (bool) WP_CLI\Utils\get_flag_value( $assoc_args, 'cache', true );
+	$no_cache      = ! $cache_enabled || $this->get_bool_flag( $assoc_args, 'no-cache' );
+	$debug_cache = $this->get_bool_flag( $assoc_args, 'debug-cache' );
 
 		$prompt = trim( implode( ' ', $args ) );
 
@@ -24,6 +25,13 @@ class Factory_AI_Command {
 		$cache_dir     = '/var/www/blueprints/cache';
 		$cache_path    = "{$cache_dir}/{$cache_key}.json";
 
+		if ( $debug_cache ) {
+			WP_CLI::log( 'Cache debug enabled.' );
+			WP_CLI::log( 'Cache mode: ' . ( $no_cache ? 'disabled' : 'enabled' ) );
+			WP_CLI::log( "Cache key: {$cache_key}" );
+			WP_CLI::log( "Cache path: {$cache_path}" );
+		}
+
 		$blueprint      = null;
 		$base_blueprint = null;
 
@@ -31,8 +39,7 @@ class Factory_AI_Command {
 			WP_CLI::log( 'Blueprint loaded from cache.' );
 
 			if ( $debug_cache ) {
-				WP_CLI::log( "Cache key: {$cache_key}" );
-				WP_CLI::log( "Cache path: {$cache_path}" );
+				WP_CLI::log( 'Cache status: hit' );
 			}
 
 			$cached_blueprint = json_decode( file_get_contents( $cache_path ), true );
@@ -43,6 +50,13 @@ class Factory_AI_Command {
 				WP_CLI::warning( 'Invalid cache, regenerating...' );
 			}
 		}
+			if ( $debug_cache && ! is_array( $blueprint ) ) {
+				WP_CLI::log(
+					$no_cache
+						? 'Cache status: bypassed by --no-cache'
+						: 'Cache status: miss'
+				);
+			}
 
 		if ( ! is_array( $blueprint ) && $preset ) {
 			WP_CLI::log( "Detected preset: {$preset}" );
@@ -294,7 +308,25 @@ SYS;
 
 		WP_CLI::success( 'AI pipeline completed: apply → plan → validate' );
 	}
+	private function get_bool_flag( array $assoc_args, string $flag ): bool {
+		if ( ! array_key_exists( $flag, $assoc_args ) ) {
+			return false;
+		}
 
+		$value = WP_CLI\Utils\get_flag_value( $assoc_args, $flag, true );
+
+		if ( is_bool( $value ) ) {
+			return $value;
+		}
+
+		if ( is_string( $value ) ) {
+			$value = strtolower( trim( $value ) );
+
+			return ! in_array( $value, [ '0', 'false', 'no', 'off' ], true );
+		}
+
+		return (bool) $value;
+	}
 	private function detect_preset( string $prompt ): ?string {
 		if ( stripos( $prompt, 'job' ) !== false ) {
 			return 'job-board';
