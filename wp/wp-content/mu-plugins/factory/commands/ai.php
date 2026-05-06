@@ -262,20 +262,7 @@ SYS;
 			);
 		}
 
-		$validator = new Factory_Blueprint_Validator();
-
-$errors = $validator->validate( $blueprint );
-
-if ( ! empty( $errors ) ) {
-
-	WP_CLI::warning( 'Blueprint validation failed:' );
-
-	foreach ( $errors as $error ) {
-		WP_CLI::log( "- {$error}" );
-	}
-
-	WP_CLI::error( 'AI returned invalid blueprint.' );
-}
+		$this->validate_blueprint_before_apply( $blueprint );
 
 		$path = '/var/www/blueprints/generated/ai-blueprint.json';
 
@@ -335,6 +322,24 @@ if ( ! empty( $errors ) ) {
 
 	private function merge_blueprints( array $base, array $override ): array {
 		return array_replace_recursive( $base, $override );
+	}
+
+	private function validate_blueprint_before_apply( array $blueprint ): void {
+		$validator = new Factory_Blueprint_Validator();
+		$errors    = $validator->validate( $blueprint );
+
+		if ( empty( $errors ) ) {
+			WP_CLI::success( 'Blueprint contract is valid.' );
+			return;
+		}
+
+		WP_CLI::warning( 'Blueprint validation failed:' );
+
+		foreach ( $errors as $error ) {
+			WP_CLI::log( "- {$error}" );
+		}
+
+		WP_CLI::error( 'AI returned invalid blueprint. Apply aborted.' );
 	}
 
 	private function cache_blueprint(
