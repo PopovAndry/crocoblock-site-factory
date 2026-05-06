@@ -7,21 +7,50 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_AI_Command {
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
-		$prompt = implode( ' ', $args );
+		$no_cache    = isset( $assoc_args['no-cache'] );
+		$debug_cache = isset( $assoc_args['debug-cache'] );
+
+		$prompt = trim( implode( ' ', $args ) );
 
 		if ( empty( $prompt ) ) {
 			WP_CLI::error( 'Please provide a prompt.' );
 		}
 
-		WP_CLI::log( 'Generating blueprint via AI...' );
+		$cache_version = 'v1';
+		$model         = 'gpt-4.1-mini';
+		$cache_key     = md5( $cache_version . '|' . $model . '|' . $prompt );
+		$cache_dir     = '/var/www/blueprints/cache';
+		$cache_path    = "{$cache_dir}/{$cache_key}.json";
 
-		$api_key = getenv( 'OPENAI_API_KEY' );
+		$blueprint = null;
 
-		if ( ! $api_key ) {
-			WP_CLI::error( 'OPENAI_API_KEY not set.' );
+		if ( ! $no_cache && file_exists( $cache_path ) ) {
+			WP_CLI::log( 'Blueprint loaded from cache.' );
+
+			if ( $debug_cache ) {
+				WP_CLI::log( "Cache key: {$cache_key}" );
+				WP_CLI::log( "Cache path: {$cache_path}" );
+			}
+
+			$cached_blueprint = json_decode( file_get_contents( $cache_path ), true );
+
+			if ( is_array( $cached_blueprint ) ) {
+				$blueprint = $cached_blueprint;
+			} else {
+				WP_CLI::warning( 'Invalid cache, regenerating...' );
+			}
 		}
 
-		$system_prompt = <<<SYS
+		if ( ! is_array( $blueprint ) ) {
+			WP_CLI::log( 'Generating blueprint via AI...' );
+
+			$api_key = getenv( 'OPENAI_API_KEY' );
+
+			if ( ! $api_key ) {
+				WP_CLI::error( 'OPENAI_API_KEY not set.' );
+			}
+
+			$system_prompt = <<<SYS
 You generate WordPress blueprints for Crocoblock Site Factory.
 
 Return ONLY valid JSON. No markdown. No explanation.
@@ -106,6 +135,7 @@ Rules:
 - If the site needs archive output, include pages.archive.
 - If the site uses repeatable cards, include listings.
 - If content has categories or types, include taxonomies and terms.
+
 Hard requirements:
 - Never return empty content arrays.
 - For every CPT, generate at least 2 demo content items.
@@ -117,58 +147,82 @@ Hard requirements:
 - For job board requests, include at least Frontend Developer and Backend Developer demo jobs.
 SYS;
 
-		$payload = [
-			'model'       => 'gpt-4.1-mini',
-			'messages'    => [
+			$payload = [
+				'model'       => $model,
+				'messages'    => [
+					[
+						'role'    => 'system',
+						'content' => $system_prompt,
+					],
+					[
+						'role'    => 'user',
+						'content' => $prompt,
+					],
+				],
+				'temperature' => 0.2,
+			];
+
+			$response = wp_remote_post(
+				'https://api.openai.com/v1/chat/completions',
 				[
-					'role'    => 'system',
-					'content' => $system_prompt,
-				],
-				[
-					'role'    => 'user',
-					'content' => $prompt,
-				],
-			],
-			'temperature' => 0.2,
-		];
+					'headers' => [
+						'Authorization' => 'Bearer ' . $api_key,
+						'Content-Type'  => 'application/json',
+					],
+					'body'    => json_encode( $payload ),
+					'timeout' => 60,
+				]
+			);
 
-		$response = wp_remote_post(
-			'https://api.openai.com/v1/chat/completions',
-			[
-				'headers' => [
-					'Authorization' => 'Bearer ' . $api_key,
-					'Content-Type'  => 'application/json',
-				],
-				'body'    => json_encode( $payload ),
-				'timeout' => 60,
-			]
-		);
+			if ( is_wp_error( $response ) ) {
+				WP_CLI::error( $response->get_error_message() );
+			}
 
-		if ( is_wp_error( $response ) ) {
-			WP_CLI::error( $response->get_error_message() );
-		}
+			$status_code = wp_remote_retrieve_response_code( $response );
+			$raw_body    = wp_remote_retrieve_body( $response );
+			$body        = json_decode( $raw_body, true );
 
-		$status_code = wp_remote_retrieve_response_code( $response );
-		$raw_body    = wp_remote_retrieve_body( $response );
-		$body        = json_decode( $raw_body, true );
+			if ( $status_code < 200 || $status_code >= 300 ) {
+				$message = $body['error']['message'] ?? $raw_body;
+				WP_CLI::error( "OpenAI API error: {$message}" );
+			}
 
-		if ( $status_code < 200 || $status_code >= 300 ) {
-			$message = $body['error']['message'] ?? $raw_body;
-			WP_CLI::error( "OpenAI API error: {$message}" );
-		}
+			$content = $body['choices'][0]['message']['content'] ?? '';
 
-		$content = $body['choices'][0]['message']['content'] ?? '';
+			if ( ! $content ) {
+				WP_CLI::error( 'Empty response from AI.' );
+			}
 
-		if ( ! $content ) {
-			WP_CLI::error( 'Empty response from AI.' );
-		}
+			$content = trim( $content );
+			$content = preg_replace( '/^```json\s*/', '', $content );
+			$content = preg_replace( '/^```\s*/', '', $content );
+			$content = preg_replace( '/\s*```$/', '', $content );
+			$content = trim( $content );
 
-		$blueprint = json_decode( $content, true );
+			$blueprint = json_decode( $content, true );
 
-		if ( ! is_array( $blueprint ) ) {
-			WP_CLI::log( 'Raw AI response:' );
-			WP_CLI::log( $content );
-			WP_CLI::error( 'Invalid JSON returned from AI.' );
+			if ( ! is_array( $blueprint ) ) {
+				WP_CLI::log( 'Raw AI response:' );
+				WP_CLI::log( $content );
+				WP_CLI::error( 'Invalid JSON returned from AI.' );
+			}
+
+			if ( ! $no_cache ) {
+				if ( ! is_dir( $cache_dir ) ) {
+					mkdir( $cache_dir, 0755, true );
+				}
+
+				file_put_contents(
+					$cache_path,
+					json_encode( $blueprint, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE )
+				);
+
+				WP_CLI::log( 'Blueprint cached.' );
+
+				if ( $debug_cache ) {
+					WP_CLI::log( "Cache saved: {$cache_path}" );
+				}
+			}
 		}
 
 		$path = '/var/www/blueprints/generated/ai-blueprint.json';
@@ -180,29 +234,25 @@ SYS;
 
 		WP_CLI::success( "Blueprint saved: {$path}" );
 
+		factory_reset_diff_report();
+
 		WP_CLI::log( 'Applying blueprint...' );
+		factory_apply_blueprint( $blueprint );
+		factory_log_diff_report();
 
-        factory_reset_diff_report();
+		WP_CLI::success( "Factory AI blueprint applied: {$path}" );
 
-        WP_CLI::log( 'Applying blueprint...' );
-        factory_apply_blueprint( $blueprint );
-        factory_log_diff_report();
+		WP_CLI::log( '' );
+		WP_CLI::log( 'Running dry-run...' );
 
-        WP_CLI::success( "Factory AI blueprint applied: {$path}" );
+		$dry_run = new Factory_Dry_Run_Command();
+		$dry_run->__invoke( [ $path ], [] );
 
-        // 🔥 AUTO PLAN
-        WP_CLI::log( '' );
-        WP_CLI::log( 'Running dry-run...' );
+		WP_CLI::log( '' );
+		WP_CLI::log( 'Running validation...' );
 
-        $dry_run = new Factory_Dry_Run_Command();
-        $dry_run->__invoke( [ $path ], [] );
+		factory_validate_blueprint_state( $blueprint, true );
 
-        // 🔥 AUTO VALIDATE
-        WP_CLI::log( '' );
-        WP_CLI::log( 'Running validation...' );
-
-        factory_validate_blueprint_state( $blueprint, true );
-
-        WP_CLI::success( 'AI pipeline completed: apply → plan → validate' );
+		WP_CLI::success( 'AI pipeline completed: apply → plan → validate' );
 	}
 }
