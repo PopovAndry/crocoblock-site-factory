@@ -16,6 +16,8 @@ class Factory_AI_Command {
 			WP_CLI::error( 'Please provide a prompt.' );
 		}
 
+		$preset = $this->detect_preset( $prompt );
+
 		$cache_version = 'v1';
 		$model         = 'gpt-4.1-mini';
 		$cache_key     = md5( $cache_version . '|' . $model . '|' . $prompt );
@@ -38,6 +40,28 @@ class Factory_AI_Command {
 				$blueprint = $cached_blueprint;
 			} else {
 				WP_CLI::warning( 'Invalid cache, regenerating...' );
+			}
+		}
+
+		if ( ! is_array( $blueprint ) && $preset ) {
+			WP_CLI::log( "Detected preset: {$preset}" );
+
+			try {
+				$manager   = new Factory_Blueprint_Preset_Manager();
+				$blueprint = $manager->load_preset( $preset );
+
+				WP_CLI::log( 'Preset loaded.' );
+
+				$this->cache_blueprint(
+					$blueprint,
+					$cache_dir,
+					$cache_path,
+					$no_cache,
+					$debug_cache
+				);
+			} catch ( Throwable $e ) {
+				WP_CLI::warning( 'Preset load failed, fallback to AI: ' . $e->getMessage() );
+				$blueprint = null;
 			}
 		}
 
@@ -193,11 +217,7 @@ SYS;
 				WP_CLI::error( 'Empty response from AI.' );
 			}
 
-			$content = trim( $content );
-			$content = preg_replace( '/^```json\s*/', '', $content );
-			$content = preg_replace( '/^```\s*/', '', $content );
-			$content = preg_replace( '/\s*```$/', '', $content );
-			$content = trim( $content );
+			$content = $this->clean_json_response( $content );
 
 			$blueprint = json_decode( $content, true );
 
@@ -207,22 +227,13 @@ SYS;
 				WP_CLI::error( 'Invalid JSON returned from AI.' );
 			}
 
-			if ( ! $no_cache ) {
-				if ( ! is_dir( $cache_dir ) ) {
-					mkdir( $cache_dir, 0755, true );
-				}
-
-				file_put_contents(
-					$cache_path,
-					json_encode( $blueprint, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE )
-				);
-
-				WP_CLI::log( 'Blueprint cached.' );
-
-				if ( $debug_cache ) {
-					WP_CLI::log( "Cache saved: {$cache_path}" );
-				}
-			}
+			$this->cache_blueprint(
+				$blueprint,
+				$cache_dir,
+				$cache_path,
+				$no_cache,
+				$debug_cache
+			);
 		}
 
 		$path = '/var/www/blueprints/generated/ai-blueprint.json';
@@ -254,5 +265,57 @@ SYS;
 		factory_validate_blueprint_state( $blueprint, true );
 
 		WP_CLI::success( 'AI pipeline completed: apply → plan → validate' );
+	}
+
+	private function detect_preset( string $prompt ): ?string {
+		if ( stripos( $prompt, 'job' ) !== false ) {
+			return 'job-board';
+		}
+
+		if (
+			stripos( $prompt, 'real estate' ) !== false ||
+			stripos( $prompt, 'property' ) !== false ||
+			stripos( $prompt, 'properties' ) !== false
+		) {
+			return 'real-estate';
+		}
+
+		return null;
+	}
+
+	private function clean_json_response( string $content ): string {
+		$content = trim( $content );
+		$content = preg_replace( '/^```json\s*/', '', $content );
+		$content = preg_replace( '/^```\s*/', '', $content );
+		$content = preg_replace( '/\s*```$/', '', $content );
+
+		return trim( $content );
+	}
+
+	private function cache_blueprint(
+		array $blueprint,
+		string $cache_dir,
+		string $cache_path,
+		bool $no_cache,
+		bool $debug_cache
+	): void {
+		if ( $no_cache ) {
+			return;
+		}
+
+		if ( ! is_dir( $cache_dir ) ) {
+			mkdir( $cache_dir, 0755, true );
+		}
+
+		file_put_contents(
+			$cache_path,
+			json_encode( $blueprint, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE )
+		);
+
+		WP_CLI::log( 'Blueprint cached.' );
+
+		if ( $debug_cache ) {
+			WP_CLI::log( "Cache saved: {$cache_path}" );
+		}
 	}
 }
