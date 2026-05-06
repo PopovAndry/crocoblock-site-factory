@@ -262,6 +262,21 @@ SYS;
 			);
 		}
 
+		$validator = new Factory_Blueprint_Validator();
+
+$errors = $validator->validate( $blueprint );
+
+if ( ! empty( $errors ) ) {
+
+	WP_CLI::warning( 'Blueprint validation failed:' );
+
+	foreach ( $errors as $error ) {
+		WP_CLI::log( "- {$error}" );
+	}
+
+	WP_CLI::error( 'AI returned invalid blueprint.' );
+}
+
 		$path = '/var/www/blueprints/generated/ai-blueprint.json';
 
 		file_put_contents(
