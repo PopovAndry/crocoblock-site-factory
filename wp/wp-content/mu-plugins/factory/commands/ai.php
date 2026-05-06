@@ -182,14 +182,27 @@ SYS;
 
 		WP_CLI::log( 'Applying blueprint...' );
 
-		factory_reset_diff_report();
-		factory_apply_blueprint( $blueprint );
-		factory_log_diff_report();
+        factory_reset_diff_report();
 
-		WP_CLI::success( "Factory AI blueprint applied: {$path}" );
+        WP_CLI::log( 'Applying blueprint...' );
+        factory_apply_blueprint( $blueprint );
+        factory_log_diff_report();
 
-		WP_CLI::log( 'Next checks:' );
-		WP_CLI::log( "wp factory dry-run {$path}" );
-		WP_CLI::log( 'wp factory validate' );
+        WP_CLI::success( "Factory AI blueprint applied: {$path}" );
+
+        // 🔥 AUTO PLAN
+        WP_CLI::log( '' );
+        WP_CLI::log( 'Running dry-run...' );
+
+        $dry_run = new Factory_Dry_Run_Command();
+        $dry_run->__invoke( [ $path ], [] );
+
+        // 🔥 AUTO VALIDATE
+        WP_CLI::log( '' );
+        WP_CLI::log( 'Running validation...' );
+
+        factory_validate_blueprint_state( $blueprint, true );
+
+        WP_CLI::success( 'AI pipeline completed: apply → plan → validate' );
 	}
 }
