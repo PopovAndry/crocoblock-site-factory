@@ -148,6 +148,40 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	WP_CLI::add_command( 'factory dry-run', Factory_Dry_Run_Command::class );
 	WP_CLI::add_command( 'factory ai', Factory_AI_Command::class );
 
+	WP_CLI::add_command( 'factory validate-blueprint', function ( $args ) {
+	$path = $args[0] ?? '';
+
+		if ( ! $path ) {
+			WP_CLI::error( 'Provide blueprint path.' );
+		}
+
+		if ( ! file_exists( $path ) ) {
+			WP_CLI::error( "Blueprint file not found: {$path}" );
+		}
+
+		$blueprint = json_decode( file_get_contents( $path ), true );
+
+		if ( ! is_array( $blueprint ) ) {
+			WP_CLI::error( 'Invalid blueprint JSON.' );
+		}
+
+		$validator = new Factory_Blueprint_Validator();
+		$errors    = $validator->validate( $blueprint );
+
+		if ( empty( $errors ) ) {
+			WP_CLI::success( 'Blueprint contract is valid.' );
+			return;
+		}
+
+		WP_CLI::warning( 'Blueprint contract validation failed:' );
+
+		foreach ( $errors as $error ) {
+			WP_CLI::log( "- {$error}" );
+		}
+
+		WP_CLI::error( 'Invalid blueprint contract.' );
+	} );
+
 	// MOCK
 	WP_CLI::add_command( 'factory generate', function () {
 		try {
