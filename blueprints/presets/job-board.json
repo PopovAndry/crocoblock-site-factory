@@ -59,9 +59,9 @@
           "salary": 3000,
           "location": "Berlin"
         },
-        "terms": {
+      "terms": {
         "job_type": ["Full-time"]
-        }
+      }
       },
       {
         "title": "Backend Developer",
@@ -71,7 +71,7 @@
           "location": "Munich"
         },
         "terms": {
-          "job_type": "Full-time"
+         "job_type": ["Full-time"]
         }
       }
     ]
