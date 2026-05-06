@@ -18,13 +18,14 @@ class Factory_AI_Command {
 
 		$preset = $this->detect_preset( $prompt );
 
-		$cache_version = 'v1';
+		$cache_version = 'v2';
 		$model         = 'gpt-4.1-mini';
-		$cache_key     = md5( $cache_version . '|' . $model . '|' . $prompt );
+		$cache_key     = md5( $cache_version . '|' . $model . '|' . ( $preset ?? 'no-preset' ) . '|' . $prompt );
 		$cache_dir     = '/var/www/blueprints/cache';
 		$cache_path    = "{$cache_dir}/{$cache_key}.json";
 
-		$blueprint = null;
+		$blueprint      = null;
+		$base_blueprint = null;
 
 		if ( ! $no_cache && file_exists( $cache_path ) ) {
 			WP_CLI::log( 'Blueprint loaded from cache.' );
@@ -47,26 +48,27 @@ class Factory_AI_Command {
 			WP_CLI::log( "Detected preset: {$preset}" );
 
 			try {
-				$manager   = new Factory_Blueprint_Preset_Manager();
-				$blueprint = $manager->load_preset( $preset );
+				$manager        = new Factory_Blueprint_Preset_Manager();
+				$base_blueprint = $manager->load_preset( $preset );
 
-				WP_CLI::log( 'Preset loaded.' );
-
-				$this->cache_blueprint(
-					$blueprint,
-					$cache_dir,
-					$cache_path,
-					$no_cache,
-					$debug_cache
-				);
+				if ( ! is_array( $base_blueprint ) ) {
+					WP_CLI::warning( 'Preset did not return a valid blueprint. Fallback to AI generation.' );
+					$base_blueprint = null;
+				} else {
+					WP_CLI::log( 'Preset loaded as base blueprint.' );
+				}
 			} catch ( Throwable $e ) {
 				WP_CLI::warning( 'Preset load failed, fallback to AI: ' . $e->getMessage() );
-				$blueprint = null;
+				$base_blueprint = null;
 			}
 		}
 
 		if ( ! is_array( $blueprint ) ) {
-			WP_CLI::log( 'Generating blueprint via AI...' );
+			WP_CLI::log(
+				is_array( $base_blueprint )
+					? 'Enhancing preset blueprint via AI...'
+					: 'Generating blueprint via AI...'
+			);
 
 			$api_key = getenv( 'OPENAI_API_KEY' );
 
@@ -75,9 +77,13 @@ class Factory_AI_Command {
 			}
 
 			$system_prompt = <<<SYS
-You generate WordPress blueprints for Crocoblock Site Factory.
+You work with WordPress blueprints for Crocoblock Site Factory.
 
 Return ONLY valid JSON. No markdown. No explanation.
+
+If the user provides an existing blueprint, modify it according to the user request and return the resulting blueprint JSON.
+
+If no existing blueprint is provided, generate a full blueprint from scratch.
 
 The blueprint must follow this structure:
 
@@ -159,6 +165,9 @@ Rules:
 - If the site needs archive output, include pages.archive.
 - If the site uses repeatable cards, include listings.
 - If content has categories or types, include taxonomies and terms.
+- If modifying an existing blueprint, preserve existing CPTs, meta fields, taxonomies, listings, pages, and content unless the user explicitly asks to remove them.
+- If the user asks to add a field, add it to CPT meta, listings fields, and demo content meta.
+- If the user asks to customize a job board, preserve salary and location unless explicitly asked to remove them.
 
 Hard requirements:
 - Never return empty content arrays.
@@ -171,6 +180,16 @@ Hard requirements:
 - For job board requests, include at least Frontend Developer and Backend Developer demo jobs.
 SYS;
 
+			$user_content = $prompt;
+
+			if ( is_array( $base_blueprint ) ) {
+				$user_content =
+					"Modify this existing blueprint:\n\n" .
+					json_encode( $base_blueprint, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE ) .
+					"\n\nUser request:\n" .
+					$prompt;
+			}
+
 			$payload = [
 				'model'       => $model,
 				'messages'    => [
@@ -180,7 +199,7 @@ SYS;
 					],
 					[
 						'role'    => 'user',
-						'content' => $prompt,
+						'content' => $user_content,
 					],
 				],
 				'temperature' => 0.2,
@@ -219,12 +238,19 @@ SYS;
 
 			$content = $this->clean_json_response( $content );
 
-			$blueprint = json_decode( $content, true );
+			$ai_blueprint = json_decode( $content, true );
 
-			if ( ! is_array( $blueprint ) ) {
+			if ( ! is_array( $ai_blueprint ) ) {
 				WP_CLI::log( 'Raw AI response:' );
 				WP_CLI::log( $content );
 				WP_CLI::error( 'Invalid JSON returned from AI.' );
+			}
+
+			if ( is_array( $base_blueprint ) ) {
+				$blueprint = $this->merge_blueprints( $base_blueprint, $ai_blueprint );
+				WP_CLI::log( 'Preset blueprint merged with AI result.' );
+			} else {
+				$blueprint = $ai_blueprint;
 			}
 
 			$this->cache_blueprint(
@@ -290,6 +316,10 @@ SYS;
 		$content = preg_replace( '/\s*```$/', '', $content );
 
 		return trim( $content );
+	}
+
+	private function merge_blueprints( array $base, array $override ): array {
+		return array_replace_recursive( $base, $override );
 	}
 
 	private function cache_blueprint(

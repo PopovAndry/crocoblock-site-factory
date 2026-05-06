@@ -42,3 +42,7 @@ function factory_diff_arrays( array $current, array $target ): array {
 
 	return $diff;
 }
+
+function factory_merge_blueprints( array $base, array $override ): array {
+    return array_replace_recursive( $base, $override );
+}
