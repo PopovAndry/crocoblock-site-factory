@@ -111,6 +111,109 @@ class Factory_Snapshot_Command {
 		);
 	}
 
+    	public function inspect( array $args = [], array $assoc_args = [] ): void {
+
+		$snapshot_id = $args[0] ?? '';
+
+		if ( ! $snapshot_id ) {
+			WP_CLI::error( 'Provide snapshot id.' );
+		}
+
+		$upload_dir = wp_upload_dir();
+
+		$snapshot_dir = trailingslashit(
+			$upload_dir['basedir']
+		) . 'factory-snapshots/' . $snapshot_id;
+
+		if ( ! is_dir( $snapshot_dir ) ) {
+			WP_CLI::error( "Snapshot not found: {$snapshot_id}" );
+		}
+
+		$metadata_path = trailingslashit( $snapshot_dir ) . 'metadata.json';
+
+		if ( ! file_exists( $metadata_path ) ) {
+			WP_CLI::error( 'Snapshot metadata not found.' );
+		}
+
+		$metadata = json_decode(
+			file_get_contents( $metadata_path ),
+			true
+		);
+
+		if ( ! is_array( $metadata ) ) {
+			WP_CLI::error( 'Invalid snapshot metadata.' );
+		}
+
+		WP_CLI::log( '' );
+		WP_CLI::log( "Snapshot: {$snapshot_id}" );
+		WP_CLI::log( '' );
+
+		WP_CLI::log(
+			'Type: ' . ( $metadata['snapshot_type'] ?? 'unknown' )
+		);
+
+		WP_CLI::log(
+			'Source: ' . ( $metadata['source'] ?? 'unknown' )
+		);
+
+		WP_CLI::log(
+			'Created: ' . ( $metadata['created_at'] ?? 'unknown' )
+		);
+
+		WP_CLI::log( '' );
+
+		WP_CLI::log(
+			'WordPress: ' . ( $metadata['wp_version'] ?? 'unknown' )
+		);
+
+		WP_CLI::log(
+			'PHP: ' . ( $metadata['php_version'] ?? 'unknown' )
+		);
+
+		WP_CLI::log( '' );
+
+		WP_CLI::log(
+			'Theme: ' . ( $metadata['active_theme'] ?? 'unknown' )
+		);
+
+		WP_CLI::log( '' );
+
+		$plugins = $metadata['active_plugins'] ?? [];
+
+		if ( ! empty( $plugins ) && is_array( $plugins ) ) {
+
+			WP_CLI::log( 'Plugins:' );
+
+			foreach ( $plugins as $plugin ) {
+				WP_CLI::log( "- {$plugin}" );
+			}
+		}
+
+		WP_CLI::log( '' );
+
+		$files = [
+			'blueprint.json',
+			'report.json',
+		];
+
+		WP_CLI::log( 'Files:' );
+
+		foreach ( $files as $file ) {
+
+			$exists = file_exists(
+				trailingslashit( $snapshot_dir ) . $file
+			);
+
+			WP_CLI::log(
+				sprintf(
+					'- %s %s',
+					$exists ? '✓' : '✗',
+					$file
+				)
+			);
+		}
+	}
+
 	private function store_blueprint( string $snapshot_dir ): ?string {
 
 		$source = '/var/www/blueprints/generated/ai-blueprint.json';
