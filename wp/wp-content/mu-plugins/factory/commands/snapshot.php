@@ -22,9 +22,16 @@ class Factory_Snapshot_Command {
 
 		wp_mkdir_p( $snapshot_dir );
 
-		$this->store_blueprint( $snapshot_dir );
-		$this->store_report( $snapshot_dir );
-		$this->store_metadata( $snapshot_dir, $timestamp );
+		$blueprint_path = $this->store_blueprint( $snapshot_dir );
+		$report_path    = $this->store_report( $snapshot_dir );
+
+		$this->store_metadata(
+			$snapshot_dir,
+			$timestamp,
+			$blueprint_path,
+			$report_path,
+			$assoc_args
+		);
 
 		WP_CLI::success( "Snapshot created: {$timestamp}" );
 	}
@@ -59,6 +66,8 @@ class Factory_Snapshot_Command {
 			$metadata_path = trailingslashit( $path ) . 'metadata.json';
 
 			$created = $item;
+			$type    = 'unknown';
+			$source  = 'unknown';
 
 			if ( file_exists( $metadata_path ) ) {
 
@@ -67,14 +76,26 @@ class Factory_Snapshot_Command {
 					true
 				);
 
-				if ( is_array( $metadata ) && ! empty( $metadata['created_at'] ) ) {
-					$created = $metadata['created_at'];
+				if ( is_array( $metadata ) ) {
+					if ( ! empty( $metadata['created_at'] ) ) {
+						$created = $metadata['created_at'];
+					}
+
+					if ( ! empty( $metadata['snapshot_type'] ) ) {
+						$type = $metadata['snapshot_type'];
+					}
+
+					if ( ! empty( $metadata['source'] ) ) {
+						$source = $metadata['source'];
+					}
 				}
 			}
 
 			$snapshots[] = [
 				'id'      => $item,
 				'created' => $created,
+				'type'    => $type,
+				'source'  => $source,
 			];
 		}
 
@@ -86,53 +107,65 @@ class Factory_Snapshot_Command {
 		WP_CLI\Utils\format_items(
 			'table',
 			$snapshots,
-			[ 'id', 'created' ]
+			[ 'id', 'created', 'type', 'source' ]
 		);
 	}
 
-	private function store_blueprint( string $snapshot_dir ): void {
+	private function store_blueprint( string $snapshot_dir ): ?string {
 
 		$source = '/var/www/blueprints/generated/ai-blueprint.json';
 
 		if ( ! file_exists( $source ) ) {
-			return;
+			return null;
 		}
 
-		copy(
-			$source,
-			trailingslashit( $snapshot_dir ) . 'blueprint.json'
-		);
+		$target = trailingslashit( $snapshot_dir ) . 'blueprint.json';
+
+		copy( $source, $target );
+
+		return $target;
 	}
 
-	private function store_report( string $snapshot_dir ): void {
+	private function store_report( string $snapshot_dir ): ?string {
 
 		$upload_dir = wp_upload_dir();
 
 		$source = trailingslashit( $upload_dir['basedir'] ) . 'factory-report.json';
 
 		if ( ! file_exists( $source ) ) {
-			return;
+			return null;
 		}
 
-		copy(
-			$source,
-			trailingslashit( $snapshot_dir ) . 'report.json'
-		);
+		$target = trailingslashit( $snapshot_dir ) . 'report.json';
+
+		copy( $source, $target );
+
+		return $target;
 	}
 
 	private function store_metadata(
 		string $snapshot_dir,
-		string $timestamp
+		string $timestamp,
+		?string $blueprint_path,
+		?string $report_path,
+		array $assoc_args
 	): void {
 
 		$metadata = [
-			'created_at'    => $timestamp,
-			'wp_version'    => get_bloginfo( 'version' ),
-			'php_version'   => PHP_VERSION,
-			'active_theme'  => wp_get_theme()->get( 'Name' ),
-			'active_plugins'=> array_values(
+			'created_at'             => $timestamp,
+			'snapshot_type'          => $assoc_args['type'] ?? 'manual',
+			'source'                 => $assoc_args['source'] ?? 'manual',
+			'factory_version'        => 'v1',
+			'wp_version'             => get_bloginfo( 'version' ),
+			'php_version'            => PHP_VERSION,
+			'active_theme'           => wp_get_theme()->get( 'Name' ),
+			'active_plugins'         => array_values(
 				wp_get_active_and_valid_plugins()
 			),
+			'blueprint_path'         => $blueprint_path,
+			'report_path'            => $report_path,
+			'current_blueprint_hash' => $this->get_file_hash( $blueprint_path ),
+			'current_report_hash'    => $this->get_file_hash( $report_path ),
 		];
 
 		file_put_contents(
@@ -142,5 +175,13 @@ class Factory_Snapshot_Command {
 				JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
 			)
 		);
+	}
+
+	private function get_file_hash( ?string $path ): ?string {
+		if ( ! $path || ! file_exists( $path ) ) {
+			return null;
+		}
+
+		return md5_file( $path );
 	}
 }

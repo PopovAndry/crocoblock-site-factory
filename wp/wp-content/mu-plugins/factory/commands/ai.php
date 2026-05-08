@@ -290,7 +290,13 @@ SYS;
 		WP_CLI::log( 'Creating pre-apply snapshot...' );
 
 		$snapshot = new Factory_Snapshot_Command();
-		$snapshot->create( [], [] );
+		$snapshot->create(
+			[],
+			[
+				'type'   => 'pre_apply',
+				'source' => 'ai',
+			]
+		);
 
 		factory_reset_diff_report();
 
