@@ -6,10 +6,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_AI_Command {
 
-	public function __invoke( array $args = [], array $assoc_args = [] ): void {
+public function __invoke( array $args = [], array $assoc_args = [] ): void {
 	$cache_enabled = (bool) WP_CLI\Utils\get_flag_value( $assoc_args, 'cache', true );
 	$no_cache      = ! $cache_enabled || $this->get_bool_flag( $assoc_args, 'no-cache' );
-	$debug_cache = $this->get_bool_flag( $assoc_args, 'debug-cache' );
+	$debug_cache   = $this->get_bool_flag( $assoc_args, 'debug-cache' );
 
 		$prompt = trim( implode( ' ', $args ) );
 
@@ -19,7 +19,7 @@ class Factory_AI_Command {
 
 		$preset = $this->detect_preset( $prompt );
 
-		$cache_version = 'v2';
+		$cache_version = 'v3';
 		$model         = 'gpt-4.1-mini';
 		$cache_key     = md5( $cache_version . '|' . $model . '|' . ( $preset ?? 'no-preset' ) . '|' . $prompt );
 		$cache_dir     = '/var/www/blueprints/cache';
@@ -352,8 +352,214 @@ SYS;
 		return trim( $content );
 	}
 
-	private function merge_blueprints( array $base, array $override ): array {
-		return array_replace_recursive( $base, $override );
+private function merge_blueprints( array $base, array $override ): array {
+	$merged = $base;
+
+	foreach ( [ 'version', 'site', 'theme', 'pages', 'single' ] as $key ) {
+		if ( array_key_exists( $key, $override ) ) {
+			$merged[ $key ] = is_array( $override[ $key ] ) && isset( $merged[ $key ] ) && is_array( $merged[ $key ] )
+				? array_replace_recursive( $merged[ $key ], $override[ $key ] )
+				: $override[ $key ];
+		}
+	}
+
+	if ( isset( $override['plugins'] ) && is_array( $override['plugins'] ) ) {
+		$merged['plugins'] = $this->merge_list_by_key(
+			$base['plugins'] ?? [],
+			$override['plugins'],
+			'slug'
+		);
+	}
+
+	if ( isset( $override['cpt'] ) && is_array( $override['cpt'] ) ) {
+		$merged['cpt'] = $this->merge_list_by_key(
+			$base['cpt'] ?? [],
+			$override['cpt'],
+			'slug',
+			[ $this, 'merge_cpt_item' ]
+		);
+	}
+
+	if ( isset( $override['taxonomies'] ) && is_array( $override['taxonomies'] ) ) {
+		$merged['taxonomies'] = $this->merge_list_by_key(
+			$base['taxonomies'] ?? [],
+			$override['taxonomies'],
+			'slug',
+			[ $this, 'merge_taxonomy_item' ]
+		);
+	}
+
+	if ( isset( $override['listings'] ) && is_array( $override['listings'] ) ) {
+		$merged['listings'] = $this->merge_list_by_key(
+			$base['listings'] ?? [],
+			$override['listings'],
+			'slug'
+		);
+	}
+
+	if ( isset( $override['content'] ) && is_array( $override['content'] ) ) {
+		$merged['content'] = $this->merge_content(
+			$base['content'] ?? [],
+			$override['content']
+		);
+	}
+
+	return $merged;
+}
+
+private function merge_cpt_item( array $base, array $override ): array {
+	$merged = array_replace_recursive( $base, $override );
+
+	if ( isset( $override['meta'] ) && is_array( $override['meta'] ) ) {
+		$merged['meta'] = $this->merge_list_by_key(
+			$base['meta'] ?? [],
+			$override['meta'],
+			'key'
+		);
+	}
+
+	return $merged;
+}
+
+private function merge_taxonomy_item( array $base, array $override ): array {
+	$merged = array_replace_recursive( $base, $override );
+
+	if ( isset( $override['terms'] ) && is_array( $override['terms'] ) ) {
+		$terms = array_values(
+			array_unique(
+				array_merge(
+					$this->normalize_string_list( $base['terms'] ?? [] ),
+					$this->normalize_string_list( $override['terms'] )
+				)
+			)
+		);
+
+		$merged['terms'] = $terms;
+	}
+
+	return $merged;
+}
+
+private function merge_content( array $base, array $override ): array {
+	$merged = $base;
+
+	foreach ( $override as $post_type => $items ) {
+		if ( ! is_array( $items ) ) {
+			$merged[ $post_type ] = $items;
+			continue;
+		}
+
+		$merged[ $post_type ] = $this->merge_list_by_key(
+			$base[ $post_type ] ?? [],
+			$items,
+			'title',
+			[ $this, 'merge_content_item' ]
+		);
+	}
+
+	return $merged;
+}
+
+private function merge_content_item( array $base, array $override ): array {
+	$merged = array_replace_recursive( $base, $override );
+
+	if ( isset( $override['meta'] ) && is_array( $override['meta'] ) ) {
+		$merged['meta'] = array_replace_recursive(
+			$base['meta'] ?? [],
+			$override['meta']
+		);
+	}
+
+	if ( isset( $override['terms'] ) && is_array( $override['terms'] ) ) {
+		$merged['terms'] = array_replace_recursive(
+			$base['terms'] ?? [],
+			$override['terms']
+		);
+	}
+
+	return $merged;
+}
+
+private function merge_list_by_key(
+	array $base,
+	array $override,
+	string $key,
+	?callable $item_merger = null
+): array {
+	$indexed = [];
+	$order   = [];
+
+	foreach ( $base as $item ) {
+		if ( ! is_array( $item ) || empty( $item[ $key ] ) ) {
+			$order[]    = null;
+			$indexed[]  = $item;
+			continue;
+		}
+
+		$id = (string) $item[ $key ];
+
+		if ( ! array_key_exists( $id, $indexed ) ) {
+			$order[] = $id;
+		}
+
+		$indexed[ $id ] = $item;
+	}
+
+	foreach ( $override as $item ) {
+		if ( ! is_array( $item ) || empty( $item[ $key ] ) ) {
+			$order[]   = null;
+			$indexed[] = $item;
+			continue;
+		}
+
+		$id = (string) $item[ $key ];
+
+		if ( array_key_exists( $id, $indexed ) && is_array( $indexed[ $id ] ) ) {
+			$indexed[ $id ] = $item_merger
+				? call_user_func( $item_merger, $indexed[ $id ], $item )
+				: array_replace_recursive( $indexed[ $id ], $item );
+		} else {
+			$order[]        = $id;
+			$indexed[ $id ] = $item;
+		}
+	}
+
+	$result = [];
+
+	foreach ( $order as $id ) {
+		if ( null === $id ) {
+			continue;
+		}
+
+		if ( array_key_exists( $id, $indexed ) ) {
+			$result[] = $indexed[ $id ];
+		}
+	}
+
+	foreach ( $indexed as $id => $item ) {
+		if ( is_int( $id ) ) {
+			$result[] = $item;
+		}
+	}
+
+	return $result;
+}
+
+	private function normalize_string_list( $value ): array {
+		if ( is_string( $value ) ) {
+			return [ $value ];
+		}
+
+		if ( ! is_array( $value ) ) {
+			return [];
+		}
+
+		return array_values(
+			array_filter(
+				$value,
+				static fn( $item ) => is_string( $item ) && '' !== trim( $item )
+			)
+		);
 	}
 
 	private function validate_blueprint_before_apply( array $blueprint ): void {
