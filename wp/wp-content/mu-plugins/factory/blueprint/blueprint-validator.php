@@ -30,6 +30,7 @@ class Factory_Blueprint_Validator {
 		'number',
 		'date',
 		'boolean',
+		'checkbox',
 		'textarea',
 		'select',
 		'media',

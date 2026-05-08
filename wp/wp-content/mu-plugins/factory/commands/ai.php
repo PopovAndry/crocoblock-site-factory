@@ -287,6 +287,11 @@ SYS;
 
 		WP_CLI::success( "Blueprint saved: {$path}" );
 
+		WP_CLI::log( 'Creating pre-apply snapshot...' );
+
+		$snapshot = new Factory_Snapshot_Command();
+		$snapshot->create( [], [] );
+
 		factory_reset_diff_report();
 
 		WP_CLI::log( 'Applying blueprint...' );
