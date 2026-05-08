@@ -6,7 +6,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Rollback_Command {
 
-	public function latest( array $args = [], array $assoc_args = [] ): void {
+	public function __invoke( array $args = [], array $assoc_args = [] ): void {
+
+		$snapshot_id = $args[0] ?? 'latest';
 
 		$upload_dir = wp_upload_dir();
 
@@ -16,29 +18,12 @@ class Factory_Rollback_Command {
 			WP_CLI::error( 'Snapshots directory not found.' );
 		}
 
-		$items = scandir( $base_dir, SCANDIR_SORT_DESCENDING );
+		$snapshot_path = $this->resolve_snapshot_path(
+			$base_dir,
+			$snapshot_id
+		);
 
-		$latest = null;
-
-		foreach ( $items as $item ) {
-
-			if ( in_array( $item, [ '.', '..' ], true ) ) {
-				continue;
-			}
-
-			$path = trailingslashit( $base_dir ) . $item;
-
-			if ( is_dir( $path ) ) {
-				$latest = $path;
-				break;
-			}
-		}
-
-		if ( ! $latest ) {
-			WP_CLI::error( 'No snapshots found.' );
-		}
-
-		$blueprint_path = trailingslashit( $latest ) . 'blueprint.json';
+		$blueprint_path = trailingslashit( $snapshot_path ) . 'blueprint.json';
 
 		if ( ! file_exists( $blueprint_path ) ) {
 			WP_CLI::error( 'Snapshot blueprint.json not found.' );
@@ -53,7 +38,7 @@ class Factory_Rollback_Command {
 			WP_CLI::error( 'Invalid snapshot blueprint JSON.' );
 		}
 
-		WP_CLI::log( 'Rolling back from snapshot...' );
+		WP_CLI::log( "Rolling back snapshot: {$snapshot_id}" );
 
 		factory_reset_diff_report();
 
@@ -71,5 +56,39 @@ class Factory_Rollback_Command {
 		}
 
 		WP_CLI::warning( 'Rollback applied, but validation has errors.' );
+	}
+
+	private function resolve_snapshot_path(
+		string $base_dir,
+		string $snapshot_id
+	): string {
+
+		if ( $snapshot_id === 'latest' ) {
+
+			$items = scandir( $base_dir, SCANDIR_SORT_DESCENDING );
+
+			foreach ( $items as $item ) {
+
+				if ( in_array( $item, [ '.', '..' ], true ) ) {
+					continue;
+				}
+
+				$path = trailingslashit( $base_dir ) . $item;
+
+				if ( is_dir( $path ) ) {
+					return $path;
+				}
+			}
+
+			WP_CLI::error( 'No snapshots found.' );
+		}
+
+		$path = trailingslashit( $base_dir ) . $snapshot_id;
+
+		if ( ! is_dir( $path ) ) {
+			WP_CLI::error( "Snapshot not found: {$snapshot_id}" );
+		}
+
+		return $path;
 	}
 }
