@@ -33,6 +33,8 @@ class Factory_Blueprint_Validator {
 		'textarea',
 		'select',
 		'media',
+		'email',
+		'url',
 	];
 
 	public function validate( array $blueprint ): array {
