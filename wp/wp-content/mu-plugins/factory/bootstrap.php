@@ -26,6 +26,7 @@ require_once __DIR__ . '/commands/fix.php';
 require_once __DIR__ . '/commands/dry-run.php';
 require_once __DIR__ . '/commands/ai.php';
 require_once __DIR__ . '/commands/snapshot.php';
+require_once __DIR__ . '/commands/rollback.php';
 
 function factory_get_blueprint(): array {
 	$blueprint = get_option( FACTORY_BLUEPRINT_OPTION );
@@ -149,6 +150,7 @@ WP_CLI::add_command( 'factory fix', Factory_Fix_Command::class );
 WP_CLI::add_command( 'factory dry-run', Factory_Dry_Run_Command::class );
 WP_CLI::add_command( 'factory ai', Factory_AI_Command::class );
 WP_CLI::add_command( 'factory snapshot', Factory_Snapshot_Command::class );
+WP_CLI::add_command( 'factory rollback', Factory_Rollback_Command::class );
 
 	WP_CLI::add_command( 'factory validate-blueprint', function ( $args ) {
 	$path = $args[0] ?? '';
