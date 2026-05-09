@@ -29,6 +29,8 @@ require_once __DIR__ . '/commands/dry-run.php';
 require_once __DIR__ . '/commands/ai.php';
 require_once __DIR__ . '/commands/snapshot.php';
 require_once __DIR__ . '/commands/rollback.php';
+require_once __DIR__ . '/commands/runs.php';
+require_once __DIR__ . '/commands/run.php';
 
 function factory_get_blueprint(): array {
 	$blueprint = get_option( FACTORY_BLUEPRINT_OPTION );
@@ -147,12 +149,20 @@ function factory_log_diff_report(): void {
 	}
 }
 
-if ( defined( 'WP_CLI' ) && WP_CLI ) {
-WP_CLI::add_command( 'factory fix', Factory_Fix_Command::class );
-WP_CLI::add_command( 'factory dry-run', Factory_Dry_Run_Command::class );
-WP_CLI::add_command( 'factory ai', Factory_AI_Command::class );
-WP_CLI::add_command( 'factory snapshot', Factory_Snapshot_Command::class );
-WP_CLI::add_command( 'factory rollback', Factory_Rollback_Command::class );
+	if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	WP_CLI::add_command( 'factory fix', Factory_Fix_Command::class );
+	WP_CLI::add_command( 'factory dry-run', Factory_Dry_Run_Command::class );
+	WP_CLI::add_command( 'factory ai', Factory_AI_Command::class );
+	WP_CLI::add_command( 'factory snapshot', Factory_Snapshot_Command::class );
+	WP_CLI::add_command( 'factory rollback', Factory_Rollback_Command::class );
+	WP_CLI::add_command(
+		'factory runs',
+		'Factory_Runs_Command'
+	);
+	WP_CLI::add_command(
+		'factory run',
+		'Factory_Run_Command'
+	);
 
 	WP_CLI::add_command( 'factory validate-blueprint', function ( $args ) {
 	$path = $args[0] ?? '';
