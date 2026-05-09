@@ -17,77 +17,77 @@ class Factory_Render_Adapter {
 	}
 
 	public function plan( array $blueprint ): array {
-	$plan = [];
+		$plan = [];
 
-	foreach ( $blueprint['listings'] ?? [] as $listing ) {
-		$slug      = $listing['slug'] ?? '';
-		$post_type = $listing['post_type'] ?? '';
+		foreach ( $blueprint['listings'] ?? [] as $listing ) {
+			$slug      = $listing['slug'] ?? '';
+			$post_type = $listing['post_type'] ?? '';
 
-		if ( ! $slug || ! $post_type ) {
-			continue;
-		}
+			if ( ! $slug || ! $post_type ) {
+				continue;
+			}
 
-		$page_config = $this->get_archive_page_config( $post_type );
+			$page_config = $this->get_archive_page_config( $post_type );
 
-		$page_slug  = $page_config['slug'] ?? $post_type . 's';
-		$page_title = $page_config['title'] ?? ucwords( str_replace( '-', ' ', $page_slug ) );
+			$page_slug  = $page_config['slug'] ?? $post_type . 's';
+			$page_title = $page_config['title'] ?? ucwords( str_replace( '-', ' ', $page_slug ) );
 
-		$content = sprintf(
-			'[factory_listing slug="%s"]',
-			esc_attr( $slug )
-		);
+			$content = sprintf(
+				'[factory_listing slug="%s"]',
+				esc_attr( $slug )
+			);
 
-		$target_state = [
-			'post_title'   => $page_title,
-			'post_name'    => $page_slug,
-			'post_status'  => 'publish',
-			'post_content' => $content,
-		];
-
-		$existing = get_page_by_path( $page_slug );
-
-		if ( ! $existing ) {
-			$plan[] = [
-				'action'  => 'create',
-				'type'    => 'render',
-				'entity'  => $page_slug,
-				'message' => "Create render page: {$page_slug}",
+			$target_state = [
+				'post_title'   => $page_title,
+				'post_name'    => $page_slug,
+				'post_status'  => 'publish',
+				'post_content' => $content,
 			];
 
-			continue;
-		}
+			$existing = get_page_by_path( $page_slug );
 
-		$current_state = [
-			'post_title'   => $existing->post_title,
-			'post_name'    => $existing->post_name,
-			'post_status'  => $existing->post_status,
-			'post_content' => $existing->post_content,
-		];
+			if ( ! $existing ) {
+				$plan[] = [
+					'action'  => 'create',
+					'type'    => 'render',
+					'entity'  => $page_slug,
+					'message' => "Create render page: {$page_slug}",
+				];
 
-		$diff = factory_diff_arrays( $current_state, $target_state );
+				continue;
+			}
 
-		if ( empty( $diff ) ) {
-			$plan[] = [
-				'action'  => 'skip',
-				'type'    => 'render',
-				'entity'  => $page_slug,
-				'message' => "Render page up-to-date: {$page_slug}",
+			$current_state = [
+				'post_title'   => $existing->post_title,
+				'post_name'    => $existing->post_name,
+				'post_status'  => $existing->post_status,
+				'post_content' => $existing->post_content,
 			];
 
-			continue;
+			$diff = factory_diff_arrays( $current_state, $target_state );
+
+			if ( empty( $diff ) ) {
+				$plan[] = [
+					'action'  => 'skip',
+					'type'    => 'render',
+					'entity'  => $page_slug,
+					'message' => "Render page up-to-date: {$page_slug}",
+				];
+
+				continue;
+			}
+
+			$plan[] = [
+				'action'  => 'update',
+				'type'    => 'render',
+				'entity'  => $page_slug,
+				'message' => "Update render page: {$page_slug}",
+				'diff'    => $diff,
+			];
 		}
 
-		$plan[] = [
-			'action'  => 'update',
-			'type'    => 'render',
-			'entity'  => $page_slug,
-			'message' => "Update render page: {$page_slug}",
-			'diff'    => $diff,
-		];
+		return $plan;
 	}
-
-	return $plan;
-}
 
 	public function validate( array $blueprint ): array {
 		$results = [];
@@ -108,13 +108,14 @@ class Factory_Render_Adapter {
 				'status'  => 'error',
 				'message' => "Render page missing: {$title}",
 			];
+
 			return $results;
 		}
 
-			$target_content = sprintf(
-				'[factory_listing slug="%s"]',
-				esc_attr( $this->get_listing_slug_for_post_type( $blueprint, $page['post_type'] ?? '' ) )
-			);
+		$target_content = sprintf(
+			'[factory_listing slug="%s"]',
+			esc_attr( $this->get_listing_slug_for_post_type( $blueprint, $page['post_type'] ?? '' ) )
+		);
 
 		$current_state = [
 			'post_title'   => $existing->post_title,
@@ -133,6 +134,7 @@ class Factory_Render_Adapter {
 				'status'  => 'error',
 				'message' => "Render page out of sync: {$title}",
 			];
+
 			return $results;
 		}
 
@@ -183,11 +185,12 @@ class Factory_Render_Adapter {
 
 			if ( empty( $diff ) ) {
 				$this->log( "Render page up-to-date: {$page_slug}" );
+
 				return;
 			}
 
-			$post_data       = $target_state;
-			$post_data['ID'] = $existing->ID;
+			$post_data              = $target_state;
+			$post_data['ID']        = $existing->ID;
 			$post_data['post_type'] = 'page';
 
 			wp_update_post( $post_data );
@@ -219,14 +222,14 @@ class Factory_Render_Adapter {
 
 		foreach ( $blueprint['listings'] ?? [] as $listing ) {
 			if ( ( $listing['slug'] ?? '' ) === $atts['slug'] ) {
-				return $this->render_listing( $listing );
+				return $this->render_listing( $listing, $blueprint );
 			}
 		}
 
 		return '';
 	}
 
-	private function render_listing( array $listing ): string {
+	private function render_listing( array $listing, array $blueprint ): string {
 		$post_type = $listing['post_type'] ?? '';
 
 		if ( ! $post_type ) {
@@ -237,11 +240,15 @@ class Factory_Render_Adapter {
 			'post_type'      => $post_type,
 			'post_status'    => 'publish',
 			'posts_per_page' => 12,
+			'orderby'        => 'ID',
+			'order'          => 'ASC',
 		] );
 
 		if ( ! $query->have_posts() ) {
 			return '<p>No items found.</p>';
 		}
+
+		$fields = $this->get_render_fields( $listing, $blueprint, $post_type );
 
 		ob_start();
 		?>
@@ -254,7 +261,6 @@ class Factory_Render_Adapter {
 			</header>
 
 			<div class="factory-listing-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px;">
-
 				<?php
 				while ( $query->have_posts() ) :
 					$query->the_post();
@@ -267,51 +273,32 @@ class Factory_Render_Adapter {
 							</a>
 						</h2>
 
-						<?php
-						$layout = $listing['layout'] ?? [];
-
-						if ( empty( $layout ) && ! empty( $listing['fields'] ) ) {
-							$layout = $listing['fields'];
-						}
-						?>
-
-						<?php foreach ( $layout as $field ) : ?>
+						<?php foreach ( $fields as $field ) : ?>
 							<?php
-							if ( ( $field['type'] ?? '' ) !== 'meta' ) {
-								continue;
-							}
-
 							$key = $field['key'] ?? '';
 
-							if ( ! $key ) {
+							if ( ! $key || 'title' === $key ) {
 								continue;
 							}
 
 							$value = get_post_meta( get_the_ID(), $key, true );
 
-							if ( $value === '' ) {
+							if ( '' === $value || [] === $value ) {
 								continue;
 							}
 
-							$label  = $field['label'] ?? ucfirst( $key );
-							$format = $field['format'] ?? '';
+							$label = $field['label'] ?? $this->humanize_key( $key );
+							$type  = $field['type'] ?? 'text';
 							?>
 
 							<div style="margin-top: 10px;">
 								<strong><?php echo esc_html( $label ); ?>:</strong>
-								<?php
-								if ( $format === 'currency' ) {
-									echo '$' . esc_html( number_format( (float) $value ) );
-								} else {
-									echo esc_html( $value );
-								}
-								?>
+								<?php echo esc_html( $this->format_value( $value, $type ) ); ?>
 							</div>
 						<?php endforeach; ?>
 					</article>
 
 				<?php endwhile; ?>
-
 			</div>
 		</section>
 
@@ -319,6 +306,110 @@ class Factory_Render_Adapter {
 		wp_reset_postdata();
 
 		return ob_get_clean();
+	}
+
+	private function get_render_fields(
+		array $listing,
+		array $blueprint,
+		string $post_type
+	): array {
+		$meta_map = $this->get_cpt_meta_map( $blueprint, $post_type );
+		$fields   = [];
+		$used     = [];
+
+		if ( ! empty( $listing['layout'] ) && is_array( $listing['layout'] ) ) {
+			foreach ( $listing['layout'] as $field ) {
+				if ( ! is_array( $field ) || ( $field['type'] ?? '' ) !== 'meta' ) {
+					continue;
+				}
+
+				$key = $field['key'] ?? '';
+
+				if ( ! $key ) {
+					continue;
+				}
+
+				$fields[] = [
+					'key'   => $key,
+					'type'  => $meta_map[ $key ]['type'] ?? 'text',
+					'label' => $field['label'] ?? $meta_map[ $key ]['label'] ?? $this->humanize_key( $key ),
+				];
+
+				$used[ $key ] = true;
+			}
+		}
+
+		if ( ! empty( $listing['fields'] ) && is_array( $listing['fields'] ) ) {
+			foreach ( $listing['fields'] as $field ) {
+				if ( ! is_string( $field ) || 'title' === $field ) {
+					continue;
+				}
+
+				if ( isset( $used[ $field ] ) ) {
+					continue;
+				}
+
+				$fields[] = [
+					'key'   => $field,
+					'type'  => $meta_map[ $field ]['type'] ?? 'text',
+					'label' => $meta_map[ $field ]['label'] ?? $this->humanize_key( $field ),
+				];
+
+				$used[ $field ] = true;
+			}
+		}
+
+		if ( empty( $fields ) ) {
+			return array_values( $meta_map );
+		}
+
+		return $fields;
+	}
+
+	private function get_cpt_meta_map( array $blueprint, string $post_type ): array {
+		foreach ( $blueprint['cpt'] ?? [] as $cpt ) {
+			if ( ( $cpt['slug'] ?? '' ) !== $post_type ) {
+				continue;
+			}
+
+			$map = [];
+
+			foreach ( $cpt['meta'] ?? [] as $field ) {
+				if ( empty( $field['key'] ) ) {
+					continue;
+				}
+
+				$map[ $field['key'] ] = [
+					'key'   => $field['key'],
+					'type'  => $field['type'] ?? 'text',
+					'label' => $field['label'] ?? $this->humanize_key( $field['key'] ),
+				];
+			}
+
+			return $map;
+		}
+
+		return [];
+	}
+
+	private function format_value( $value, string $type ): string {
+		if ( is_array( $value ) ) {
+			$value = implode( ', ', $value );
+		}
+
+		if ( in_array( $type, [ 'boolean', 'checkbox' ], true ) ) {
+			return $value ? 'Yes' : 'No';
+		}
+
+		if ( 'number' === $type && is_numeric( $value ) ) {
+			return number_format( (float) $value );
+		}
+
+		return (string) $value;
+	}
+
+	private function humanize_key( string $key ): string {
+		return ucwords( str_replace( '_', ' ', $key ) );
 	}
 
 	private function get_archive_page_config( string $post_type ): array {
@@ -333,13 +424,7 @@ class Factory_Render_Adapter {
 		return [];
 	}
 
-	private function log( string $message ): void {
-		if ( defined( 'WP_CLI' ) && WP_CLI ) {
-			WP_CLI::log( $message );
-		}
-	}
-
-		private function get_listing_slug_for_post_type( array $blueprint, string $post_type ): string {
+	private function get_listing_slug_for_post_type( array $blueprint, string $post_type ): string {
 		foreach ( $blueprint['listings'] ?? [] as $listing ) {
 			if ( ( $listing['post_type'] ?? '' ) === $post_type ) {
 				return $listing['slug'] ?? '';
@@ -347,5 +432,11 @@ class Factory_Render_Adapter {
 		}
 
 		return '';
+	}
+
+	private function log( string $message ): void {
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			WP_CLI::log( $message );
+		}
 	}
 }
