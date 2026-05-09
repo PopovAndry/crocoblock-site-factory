@@ -333,6 +333,23 @@ SYS;
 			$blueprint,
 			true
 		);
+		$plan = json_decode(
+		file_get_contents( $plan_path ),
+		true
+		);
+
+		$manifest_path = factory_save_run_manifest(
+			$prompt,
+			$preset,
+			$blueprint,
+			$plan,
+			$report,
+			'ok'
+		);
+
+		WP_CLI::success(
+			"Run manifest saved: {$manifest_path}"
+		);
 
 		if ( ( $report['status'] ?? 'error' ) !== 'ok' ) {
 			WP_CLI::warning(
