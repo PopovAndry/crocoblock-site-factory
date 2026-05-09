@@ -35,10 +35,13 @@ class Factory_Dry_Run_Command {
 	}
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
-		$format = $assoc_args['format'] ?? 'table';
-		$diff_mode = $assoc_args['diff'] ?? 'short';
+		$path         = $args[0] ?? FACTORY_BLUEPRINT_PATH;
+		$format       = $assoc_args['format'] ?? 'table';
+		$output_path  = $assoc_args['output-file'] ?? '';
+		$diff_mode    = $assoc_args['diff'] ?? 'short';
 		$only_changes = isset( $assoc_args['only-changes'] );
 		$only         = $assoc_args['only'] ?? null;
+		$is_json      = 'json' === $format;
 
 		$only_map = [
 			'plugins'  => Factory_Plugin_Adapter::class,
@@ -55,10 +58,6 @@ class Factory_Dry_Run_Command {
 		if ( $only && isset( $only_map[ $only ] ) ) {
 			$only = $only_map[ $only ];
 		}
-
-		$path   = $args[0] ?? FACTORY_BLUEPRINT_PATH;
-		$format       = $assoc_args['format'] ?? 'table';
-		$is_json      = $format === 'json';
 
 		if ( ! file_exists( $path ) ) {
 			WP_CLI::error( "Blueprint file not found: {$path}" );
@@ -81,33 +80,6 @@ class Factory_Dry_Run_Command {
 		$all_items = [];
 
 		if ( ! $is_json ) {
-			if ( 'json' === $format ) {
-
-			$summary = [
-				'create' => 0,
-				'update' => 0,
-				'skip'   => 0,
-			];
-
-			foreach ( $plan as $item ) {
-
-				$action = $item['action'] ?? '';
-
-				if ( isset( $summary[ $action ] ) ) {
-					$summary[ $action ]++;
-				}
-			}
-
-			echo wp_json_encode(
-				[
-					'summary' => $summary,
-					'changes' => $plan,
-				],
-				JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
-			);
-
-			return;
-		}
 			WP_CLI::log( '' );
 			WP_CLI::log( 'Factory plan' );
 			WP_CLI::log( 'Blueprint: ' . $path );
@@ -117,9 +89,10 @@ class Factory_Dry_Run_Command {
 
 		foreach ( factory_get_adapters() as $adapter ) {
 			$class = get_class( $adapter );
+
 			if ( $only && $class !== $only ) {
-			continue;
-		}
+				continue;
+			}
 
 			if ( method_exists( $adapter, 'plan' ) ) {
 				$items = $adapter->plan( $blueprint );
@@ -140,7 +113,9 @@ class Factory_Dry_Run_Command {
 				$message   = $item['message'] ?? '';
 				$is_change = in_array( $action, [ 'create', 'update', 'error', 'warning' ], true );
 
-				$summary[ $action ] = ( $summary[ $action ] ?? 0 ) + 1;
+				if ( isset( $summary[ $action ] ) ) {
+					$summary[ $action ]++;
+				}
 
 				if ( ! $only_changes || $is_change ) {
 					$visible_items[] = $item;
@@ -163,24 +138,23 @@ class Factory_Dry_Run_Command {
 			}
 
 			foreach ( $visible_items as $item ) {
+				if ( $is_json ) {
+					continue;
+				}
+
 				$action  = $item['action'] ?? 'skip';
 				$message = $item['message'] ?? '';
 
-				if ( ! $is_json ) {
-					WP_CLI::log( '  ' . $this->format_action( $action ) . ' ' . $message );
+				WP_CLI::log( '  ' . $this->format_action( $action ) . ' ' . $message );
 
 				if ( isset( $item['diff'] ) && is_array( $item['diff'] ) ) {
-
 					foreach ( $item['diff'] as $key => $change ) {
-
-						if ( $diff_mode === 'short' ) {
+						if ( 'short' === $diff_mode ) {
 							WP_CLI::log( "      - {$key} changed" );
 							continue;
 						}
 
-						// FULL mode
 						if ( is_array( $change ) ) {
-
 							if ( isset( $change['old'], $change['new'] ) ) {
 								$old = is_scalar( $change['old'] ) ? $change['old'] : '[complex]';
 								$new = is_scalar( $change['new'] ) ? $change['new'] : '[complex]';
@@ -200,7 +174,6 @@ class Factory_Dry_Run_Command {
 						WP_CLI::log( "      - {$key} changed" );
 					}
 				}
-				}
 			}
 
 			if ( ! $is_json ) {
@@ -209,10 +182,30 @@ class Factory_Dry_Run_Command {
 		}
 
 		if ( $is_json ) {
-			WP_CLI::line( json_encode( [
+			$data = [
 				'summary' => $summary,
 				'items'   => $all_items,
-			], JSON_PRETTY_PRINT ) );
+			];
+
+			$json = wp_json_encode(
+				$data,
+				JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
+			);
+
+			if ( $output_path ) {
+				$dir = dirname( $output_path );
+
+				if ( ! is_dir( $dir ) ) {
+					wp_mkdir_p( $dir );
+				}
+
+				file_put_contents( $output_path, $json );
+
+				WP_CLI::success( "Dry-run JSON saved: {$output_path}" );
+				return;
+			}
+
+			WP_CLI::line( $json );
 			return;
 		}
 
@@ -265,16 +258,16 @@ class Factory_Dry_Run_Command {
 
 	private function format_adapter_name( string $class ): string {
 		return match ( $class ) {
-			'Factory_Plugin_Adapter'             => 'Plugins',
-			'Factory_Theme_Adapter'              => 'Theme',
-			'Factory_Taxonomy_Adapter'           => 'Taxonomies',
-			'Factory_WP_Core_Adapter'            => 'WordPress Core',
-			'Factory_JetEngine_Adapter'          => 'JetEngine Meta',
-			'Factory_JetEngine_Listing_Adapter'  => 'JetEngine Listings',
-			'Factory_Render_Adapter'             => 'Render Pages',
-			'Factory_Single_Adapter'             => 'Single Templates',
-			'Factory_Content_Adapter'            => 'Content',
-			default                              => $class,
+			'Factory_Plugin_Adapter'            => 'Plugins',
+			'Factory_Theme_Adapter'             => 'Theme',
+			'Factory_Taxonomy_Adapter'          => 'Taxonomies',
+			'Factory_WP_Core_Adapter'           => 'WordPress Core',
+			'Factory_JetEngine_Adapter'         => 'JetEngine Meta',
+			'Factory_JetEngine_Listing_Adapter' => 'JetEngine Listings',
+			'Factory_Render_Adapter'            => 'Render Pages',
+			'Factory_Single_Adapter'            => 'Single Templates',
+			'Factory_Content_Adapter'           => 'Content',
+			default                             => $class,
 		};
 	}
 }
