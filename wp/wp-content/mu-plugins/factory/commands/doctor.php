@@ -7,9 +7,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_Doctor_Command {
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
+		$format  = $assoc_args['format'] ?? '';
+        $is_json = isset( $assoc_args['json'] ) || 'json' === $format;
+
 		$registry_path = WP_CONTENT_DIR . '/uploads/factory-runs/registry.json';
 
 		if ( ! file_exists( $registry_path ) ) {
+			if ( $is_json ) {
+				$this->output_json( [
+					'status' => 'error',
+					'message' => 'Run registry not found.',
+					'issues' => [],
+				] );
+
+				return;
+			}
+
 			WP_CLI::warning( 'Run registry not found.' );
 			return;
 		}
@@ -23,6 +36,16 @@ class Factory_Doctor_Command {
 		$latest = $registry['latest'] ?? '';
 
 		if ( ! $latest ) {
+			if ( $is_json ) {
+				$this->output_json( [
+					'status' => 'error',
+					'message' => 'Latest run not found.',
+					'issues' => [],
+				] );
+
+				return;
+			}
+
 			WP_CLI::warning( 'Latest run not found.' );
 			return;
 		}
@@ -41,15 +64,39 @@ class Factory_Doctor_Command {
 
 		$blueprint = $run['blueprint'] ?? [];
 
+		$current = factory_validate_blueprint_state( $blueprint, false );
+		$status  = $current['status'] ?? 'error';
+
+		if ( $is_json ) {
+			$issues = [];
+
+			foreach ( $current['checks'] ?? [] as $check ) {
+				if ( ( $check['status'] ?? '' ) === 'ok' ) {
+					continue;
+				}
+
+				$issues[] = [
+					'status'  => $check['status'] ?? 'error',
+					'message' => $check['message'] ?? '',
+				];
+			}
+
+			$this->output_json( [
+				'status'     => $status,
+				'latest_run' => $latest,
+				'prompt'     => $run['prompt'] ?? '',
+				'issues'     => $issues,
+			] );
+
+			return;
+		}
+
 		WP_CLI::log( '' );
 		WP_CLI::log( 'Factory Doctor' );
 		WP_CLI::log( '' );
 		WP_CLI::log( 'Latest Run: ' . $latest );
 		WP_CLI::log( 'Prompt: ' . ( $run['prompt'] ?? '-' ) );
 		WP_CLI::log( '' );
-
-		$current = factory_validate_blueprint_state( $blueprint, false );
-		$status  = $current['status'] ?? 'error';
 
 		if ( 'ok' === $status ) {
 			WP_CLI::success( 'System healthy. All layers are in sync.' );
@@ -79,5 +126,14 @@ class Factory_Doctor_Command {
 			$fix = new Factory_Fix_Command();
 			$fix->__invoke( [], [] );
 		}
+	}
+
+	private function output_json( array $data ): void {
+		WP_CLI::line(
+			wp_json_encode(
+				$data,
+				JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
+			)
+		);
 	}
 }
