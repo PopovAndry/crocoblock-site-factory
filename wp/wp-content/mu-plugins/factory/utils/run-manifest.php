@@ -48,5 +48,12 @@ function factory_save_run_manifest(
 		)
 	);
 
+	$manifest = $data;
+	$manifest['file'] = $path;
+
+	if ( function_exists( 'factory_update_run_registry' ) ) {
+		factory_update_run_registry( $manifest );
+	}
+
 	return $path;
 }
