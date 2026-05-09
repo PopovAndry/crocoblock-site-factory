@@ -35,6 +35,7 @@ class Factory_Dry_Run_Command {
 	}
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
+		$format = $assoc_args['format'] ?? 'table';
 		$diff_mode = $assoc_args['diff'] ?? 'short';
 		$only_changes = isset( $assoc_args['only-changes'] );
 		$only         = $assoc_args['only'] ?? null;
@@ -80,6 +81,33 @@ class Factory_Dry_Run_Command {
 		$all_items = [];
 
 		if ( ! $is_json ) {
+			if ( 'json' === $format ) {
+
+			$summary = [
+				'create' => 0,
+				'update' => 0,
+				'skip'   => 0,
+			];
+
+			foreach ( $plan as $item ) {
+
+				$action = $item['action'] ?? '';
+
+				if ( isset( $summary[ $action ] ) ) {
+					$summary[ $action ]++;
+				}
+			}
+
+			echo wp_json_encode(
+				[
+					'summary' => $summary,
+					'changes' => $plan,
+				],
+				JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
+			);
+
+			return;
+		}
 			WP_CLI::log( '' );
 			WP_CLI::log( 'Factory plan' );
 			WP_CLI::log( 'Blueprint: ' . $path );
