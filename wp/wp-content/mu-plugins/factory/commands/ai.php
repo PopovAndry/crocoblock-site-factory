@@ -310,8 +310,21 @@ SYS;
 		WP_CLI::log( '' );
 		WP_CLI::log( 'Running dry-run...' );
 
+		$plan_path = '/var/www/html/wp-content/uploads/factory-plan.json';
+
 		$dry_run = new Factory_Dry_Run_Command();
-		$dry_run->__invoke( [ $path ], [] );
+
+		$dry_run->__invoke(
+			[ $path ],
+			[
+				'format'      => 'json',
+				'output-file' => $plan_path,
+			]
+		);
+
+		WP_CLI::success(
+			"Execution plan saved: {$plan_path}"
+		);
 
 		WP_CLI::log( '' );
 		WP_CLI::log( 'Running validation...' );
