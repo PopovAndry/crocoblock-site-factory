@@ -31,6 +31,7 @@ require_once __DIR__ . '/commands/snapshot.php';
 require_once __DIR__ . '/commands/rollback.php';
 require_once __DIR__ . '/commands/runs.php';
 require_once __DIR__ . '/commands/run.php';
+require_once __DIR__ . '/commands/status.php';
 
 function factory_get_blueprint(): array {
 	$blueprint = get_option( FACTORY_BLUEPRINT_OPTION );
@@ -162,6 +163,10 @@ function factory_log_diff_report(): void {
 	WP_CLI::add_command(
 		'factory run',
 		'Factory_Run_Command'
+	);
+		WP_CLI::add_command(
+		'factory status',
+		Factory_Status_Command::class
 	);
 
 	WP_CLI::add_command( 'factory validate-blueprint', function ( $args ) {
