@@ -7,15 +7,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_Status_Command {
 
 	public function __invoke(): void {
-
 		$registry_path = WP_CONTENT_DIR .
 			'/uploads/factory-runs/registry.json';
 
 		if ( ! file_exists( $registry_path ) ) {
-			WP_CLI::warning(
-				'Factory registry not found.'
-			);
-
+			WP_CLI::warning( 'Factory registry not found.' );
 			return;
 		}
 
@@ -25,18 +21,13 @@ class Factory_Status_Command {
 		);
 
 		if ( ! is_array( $registry ) ) {
-			WP_CLI::error(
-				'Invalid registry JSON.'
-			);
+			WP_CLI::error( 'Invalid registry JSON.' );
 		}
 
 		$latest = $registry['latest'] ?? '';
 
 		if ( ! $latest ) {
-			WP_CLI::warning(
-				'No latest run found.'
-			);
-
+			WP_CLI::warning( 'No latest run found.' );
 			return;
 		}
 
@@ -45,9 +36,7 @@ class Factory_Status_Command {
 			$latest;
 
 		if ( ! file_exists( $run_path ) ) {
-			WP_CLI::error(
-				"Run file missing: {$latest}"
-			);
+			WP_CLI::error( "Run file missing: {$latest}" );
 		}
 
 		$run = json_decode(
@@ -56,9 +45,7 @@ class Factory_Status_Command {
 		);
 
 		if ( ! is_array( $run ) ) {
-			WP_CLI::error(
-				'Invalid run manifest.'
-			);
+			WP_CLI::error( 'Invalid run manifest.' );
 		}
 
 		$plan = $run['plan']['summary'] ?? [];
@@ -67,75 +54,47 @@ class Factory_Status_Command {
 		WP_CLI::log( 'Factory Status' );
 		WP_CLI::log( '' );
 
-		WP_CLI::log(
-			'Latest Run: ' . $latest
-		);
-
-		WP_CLI::log(
-			'Timestamp: ' .
-			( $run['timestamp'] ?? '-' )
-		);
-
-		WP_CLI::log(
-			'Preset: ' .
-			( $run['preset'] ?? '-' )
-		);
-
-		WP_CLI::log(
-			'Status: ' .
-			( $run['status'] ?? '-' )
-		);
-
-		WP_CLI::log(
-			'Prompt: ' .
-			( $run['prompt'] ?? '-' )
-		);
+		WP_CLI::log( 'Latest Run: ' . $latest );
+		WP_CLI::log( 'Timestamp: ' . ( $run['timestamp'] ?? '-' ) );
+		WP_CLI::log( 'Preset: ' . ( $run['preset'] ?? '-' ) );
+		WP_CLI::log( 'Status: ' . ( $run['status'] ?? '-' ) );
+		WP_CLI::log( 'Prompt: ' . ( $run['prompt'] ?? '-' ) );
 
 		WP_CLI::log( '' );
-
 		WP_CLI::log( 'Plan Summary' );
 
-		WP_CLI::log(
-			'+ Create: ' .
-			( $plan['create'] ?? 0 )
-		);
-
-		WP_CLI::log(
-			'~ Update: ' .
-			( $plan['update'] ?? 0 )
-		);
-
-		WP_CLI::log(
-			'= Skip: ' .
-			( $plan['skip'] ?? 0 )
-		);
-
-		WP_CLI::log(
-			'! Warning: ' .
-			( $plan['warning'] ?? 0 )
-		);
-
-		WP_CLI::log(
-			'x Error: ' .
-			( $plan['error'] ?? 0 )
-		);
+		WP_CLI::log( '+ Create: ' . ( $plan['create'] ?? 0 ) );
+		WP_CLI::log( '~ Update: ' . ( $plan['update'] ?? 0 ) );
+		WP_CLI::log( '= Skip: ' . ( $plan['skip'] ?? 0 ) );
+		WP_CLI::log( '! Warning: ' . ( $plan['warning'] ?? 0 ) );
+		WP_CLI::log( 'x Error: ' . ( $plan['error'] ?? 0 ) );
 
 		WP_CLI::log( '' );
 
-		$validation_status =
-			$run['validation']['status'] ?? 'unknown';
+		$current_validation = factory_validate_blueprint_state(
+			$run['blueprint'] ?? [],
+			false
+		);
 
-		if ( $validation_status === 'ok' ) {
+		$current_status = $current_validation['status'] ?? 'error';
 
-			WP_CLI::success(
-				'Validation status: OK'
-			);
-
+		if ( 'ok' === $current_status ) {
+			WP_CLI::success( 'Current system state: IN SYNC' );
 			return;
 		}
 
-		WP_CLI::warning(
-			"Validation status: {$validation_status}"
-		);
+		WP_CLI::warning( 'Current system state: DRIFT DETECTED' );
+
+		$checks = $current_validation['checks'] ?? [];
+
+		foreach ( $checks as $check ) {
+			if ( ( $check['status'] ?? '' ) === 'ok' ) {
+				continue;
+			}
+
+			WP_CLI::log(
+				'  - ' . ( $check['message'] ?? '' )
+			);
+		}
 	}
 }
