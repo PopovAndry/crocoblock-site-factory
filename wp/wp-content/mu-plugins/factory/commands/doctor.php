@@ -119,13 +119,28 @@ class Factory_Doctor_Command {
 		WP_CLI::log( 'Suggested action:' );
 		WP_CLI::log( '  wp factory fix' );
 
-		if ( isset( $assoc_args['fix'] ) ) {
-			WP_CLI::log( '' );
-			WP_CLI::log( 'Running auto-fix...' );
+            if ( isset( $assoc_args['fix'] ) ) {
+                WP_CLI::log( '' );
+                WP_CLI::log( 'Running auto-fix...' );
 
-			$fix = new Factory_Fix_Command();
-			$fix->__invoke( [], [] );
-		}
+                $fix = new Factory_Fix_Command();
+                $fix->__invoke( [], [] );
+
+                WP_CLI::log( '' );
+                WP_CLI::log( 'Re-checking system state...' );
+
+                $after_fix = factory_validate_blueprint_state(
+                    $blueprint,
+                    false
+                );
+
+                if ( ( $after_fix['status'] ?? 'error' ) === 'ok' ) {
+                    WP_CLI::success( 'System repaired. Current state: IN SYNC' );
+                    return;
+                }
+
+                WP_CLI::warning( 'Auto-fix completed, but drift still exists.' );
+            }
 	}
 
 	private function output_json( array $data ): void {
