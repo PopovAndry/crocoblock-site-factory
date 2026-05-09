@@ -8,7 +8,38 @@ class Factory_Run_Command {
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
 
-		$file = $args[0] ?? '';
+		$file = $args[0] ?? 'latest';
+
+        $registry_path = WP_CONTENT_DIR .
+            '/uploads/factory-runs/registry.json';
+
+        if ( $file === 'latest' ) {
+
+            if ( ! file_exists( $registry_path ) ) {
+                WP_CLI::error(
+                    'Run registry not found.'
+                );
+            }
+
+            $registry = json_decode(
+                file_get_contents( $registry_path ),
+                true
+            );
+
+            if ( ! is_array( $registry ) ) {
+                WP_CLI::error(
+                    'Invalid registry JSON.'
+                );
+            }
+
+            $file = $registry['latest'] ?? '';
+
+            if ( ! $file ) {
+                WP_CLI::error(
+                    'Latest run not found.'
+                );
+            }
+        }
 
 		if ( ! $file ) {
 			WP_CLI::error(
