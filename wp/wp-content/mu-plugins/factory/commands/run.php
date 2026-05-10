@@ -10,36 +10,21 @@ class Factory_Run_Command {
 
 		$file = $args[0] ?? 'latest';
 
-        $registry_path = WP_CONTENT_DIR .
-            '/uploads/factory-runs/registry.json';
+		$file = $args[0] ?? 'latest';
 
-        if ( $file === 'latest' ) {
+		if ( 'latest' === $file ) {
+			$file = factory_get_latest_run_name();
 
-            if ( ! file_exists( $registry_path ) ) {
-                WP_CLI::error(
-                    'Run registry not found.'
-                );
-            }
+			if ( ! $file ) {
+				WP_CLI::error( 'Latest run not found.' );
+			}
+		}
 
-            $registry = json_decode(
-                file_get_contents( $registry_path ),
-                true
-            );
+		$data = factory_get_run_manifest( $file );
 
-            if ( ! is_array( $registry ) ) {
-                WP_CLI::error(
-                    'Invalid registry JSON.'
-                );
-            }
-
-            $file = $registry['latest'] ?? '';
-
-            if ( ! $file ) {
-                WP_CLI::error(
-                    'Latest run not found.'
-                );
-            }
-        }
+		if ( ! is_array( $data ) ) {
+			WP_CLI::error( "Run file not found or invalid: {$file}" );
+		}
 
 		if ( ! $file ) {
 			WP_CLI::error(

@@ -7,46 +7,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_Status_Command {
 
 	public function __invoke(): void {
-		$registry_path = WP_CONTENT_DIR .
-			'/uploads/factory-runs/registry.json';
+        $latest = factory_get_latest_run_name();
 
-		if ( ! file_exists( $registry_path ) ) {
-			WP_CLI::warning( 'Factory registry not found.' );
-			return;
-		}
+        if ( ! $latest ) {
+            WP_CLI::warning( 'No latest run found.' );
+            return;
+        }
 
-		$registry = json_decode(
-			file_get_contents( $registry_path ),
-			true
-		);
+        $run = factory_get_run_manifest( $latest );
 
-		if ( ! is_array( $registry ) ) {
-			WP_CLI::error( 'Invalid registry JSON.' );
-		}
-
-		$latest = $registry['latest'] ?? '';
-
-		if ( ! $latest ) {
-			WP_CLI::warning( 'No latest run found.' );
-			return;
-		}
-
-		$run_path = WP_CONTENT_DIR .
-			'/uploads/factory-runs/' .
-			$latest;
-
-		if ( ! file_exists( $run_path ) ) {
-			WP_CLI::error( "Run file missing: {$latest}" );
-		}
-
-		$run = json_decode(
-			file_get_contents( $run_path ),
-			true
-		);
-
-		if ( ! is_array( $run ) ) {
-			WP_CLI::error( 'Invalid run manifest.' );
-		}
+        if ( ! is_array( $run ) ) {
+            WP_CLI::error( "Run file missing or invalid: {$latest}" );
+        }
 
 		$plan = $run['plan']['summary'] ?? [];
 

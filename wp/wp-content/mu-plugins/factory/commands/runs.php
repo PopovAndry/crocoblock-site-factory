@@ -7,15 +7,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_Runs_Command {
 
 	public function __invoke( array $args = [], array $assoc_args = [] ): void {
-		$path = WP_CONTENT_DIR .
-			'/uploads/factory-runs/registry.json';
+		$registry = factory_get_runs_registry();
 
 		$format      = $assoc_args['format'] ?? 'table';
 		$is_json     = 'json' === $format;
 		$latest_only = isset( $assoc_args['latest'] );
 		$failed_only = isset( $assoc_args['failed'] );
 
-		if ( ! file_exists( $path ) ) {
+		if ( empty( $registry ) ) {
 			if ( $is_json ) {
 				WP_CLI::line(
 					wp_json_encode(
@@ -33,15 +32,6 @@ class Factory_Runs_Command {
 
 			WP_CLI::warning( 'Run registry not found.' );
 			return;
-		}
-
-		$registry = json_decode(
-			file_get_contents( $path ),
-			true
-		);
-
-		if ( ! is_array( $registry ) ) {
-			WP_CLI::error( 'Invalid registry JSON.' );
 		}
 
 		$runs = $registry['runs'] ?? [];
