@@ -13,6 +13,9 @@ class Factory_Runs_Command {
 		$is_json     = 'json' === $format;
 		$latest_only = isset( $assoc_args['latest'] );
 		$failed_only = isset( $assoc_args['failed'] );
+		$limit       = isset( $assoc_args['limit'] )
+			? (int) $assoc_args['limit']
+			: 0;
 
 		if ( empty( $registry ) ) {
 			if ( $is_json ) {
@@ -56,12 +59,21 @@ class Factory_Runs_Command {
 			);
 		}
 
+		if ( $limit > 0 ) {
+			$runs = array_slice(
+				$runs,
+				0,
+				$limit
+			);
+		}
+
 		if ( empty( $runs ) ) {
 			if ( $is_json ) {
 				WP_CLI::line(
 					wp_json_encode(
 						[
 							'status' => 'ok',
+							'latest' => $registry['latest'] ?? null,
 							'runs'   => [],
 						],
 						JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
