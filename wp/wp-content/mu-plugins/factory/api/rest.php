@@ -27,6 +27,16 @@ add_action(
 				'permission_callback' => '__return_true',
 			]
 		);
+
+		register_rest_route(
+			'factory/v1',
+			'/runs',
+			[
+				'methods'             => 'GET',
+				'callback'            => 'factory_rest_runs',
+				'permission_callback' => '__return_true',
+			]
+		);
 	}
 );
 
@@ -153,6 +163,74 @@ function factory_rest_doctor(): WP_REST_Response {
 			'latest_run' => $latest,
 			'prompt'     => $run['prompt'] ?? '',
 			'issues'     => $issues,
+		]
+	);
+}
+
+function factory_rest_runs( WP_REST_Request $request ): WP_REST_Response {
+
+	$registry = factory_get_runs_registry();
+
+	if ( empty( $registry ) ) {
+		return new WP_REST_Response(
+			[
+				'status'  => 'error',
+				'message' => 'Run registry not found.',
+				'runs'    => [],
+			],
+			404
+		);
+	}
+
+	$runs = $registry['runs'] ?? [];
+
+	if ( $request->get_param( 'latest' ) ) {
+		$latest = $registry['latest'] ?? '';
+
+		$runs = array_values(
+			array_filter(
+				$runs,
+				static fn( $run ) => ( $run['file'] ?? '' ) === $latest
+			)
+		);
+	}
+
+	if ( $request->get_param( 'failed' ) ) {
+		$runs = array_values(
+			array_filter(
+				$runs,
+				static fn( $run ) => ( $run['status'] ?? '' ) !== 'ok'
+			)
+		);
+	}
+
+	$limit = (int) $request->get_param( 'limit' );
+
+	if ( $limit > 0 ) {
+		$runs = array_slice(
+			$runs,
+			0,
+			$limit
+		);
+	}
+
+	$rows = [];
+
+	foreach ( $runs as $run ) {
+		$rows[] = [
+			'file'      => $run['file'] ?? '',
+			'timestamp' => $run['timestamp'] ?? '',
+			'status'    => $run['status'] ?? '',
+			'preset'    => $run['preset'] ?? '',
+			'prompt'    => $run['prompt'] ?? '',
+		];
+	}
+
+	return new WP_REST_Response(
+		[
+			'status' => 'ok',
+			'latest' => $registry['latest'] ?? null,
+			'runs'   => $rows,
 		]
 	);
 }
