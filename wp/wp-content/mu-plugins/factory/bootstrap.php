@@ -36,6 +36,7 @@ require_once __DIR__ . '/commands/status.php';
 require_once __DIR__ . '/commands/doctor.php';
 require_once __DIR__ . '/commands/latest.php';
 require_once __DIR__ . '/commands/explain.php';
+require_once __DIR__ . '/commands/summary.php';
 
 function factory_get_blueprint(): array {
 	$blueprint = get_option( FACTORY_BLUEPRINT_OPTION );
@@ -183,6 +184,10 @@ function factory_log_diff_report(): void {
 		WP_CLI::add_command(
 		'factory explain',
 		'Factory_Explain_Command'
+	);
+		WP_CLI::add_command(
+		'factory summary',
+		'Factory_Summary_Command'
 	);
 
 	WP_CLI::add_command( 'factory validate-blueprint', function ( $args ) {
