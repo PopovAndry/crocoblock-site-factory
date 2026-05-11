@@ -64,9 +64,61 @@ add_action(
                 'permission_callback' => '__return_true',
             ]
         );
+        register_rest_route(
+            'factory/v1',
+            '/capabilities',
+            [
+                'methods'             => 'GET',
+                'callback'            => 'factory_rest_capabilities',
+                'permission_callback' => '__return_true',
+            ]
+        );
 	}
 );
 
+    function factory_rest_capabilities(): WP_REST_Response {
+
+        return new WP_REST_Response(
+            [
+                'version' => '1.0',
+
+                'ai'      => true,
+                'docker'  => true,
+                'wp_cli'  => true,
+
+                'presets' => [
+                    'job-board',
+                    'real-estate',
+                ],
+
+                'commands' => [
+                    'ai',
+                    'apply',
+                    'validate',
+                    'fix',
+                    'doctor',
+                    'summary',
+                    'runs',
+                    'latest',
+                    'run',
+                    'explain',
+                    'reset',
+                ],
+
+                'adapters' => [
+                    'plugins',
+                    'theme',
+                    'taxonomy',
+                    'wp_core',
+                    'jetengine',
+                    'listing',
+                    'render',
+                    'single',
+                    'content',
+                ],
+            ]
+        );
+    }
     function factory_rest_index(): WP_REST_Response {
 
         return new WP_REST_Response(
@@ -75,11 +127,13 @@ add_action(
                 'version'     => '1.0',
                 'status'      => 'active',
                 'endpoints'   => [
-                    '/summary',
-                    '/doctor',
-                    '/runs',
-                    '/run/latest',
-                    '/explain/latest',
+                '/summary',
+                '/doctor',
+                '/runs',
+                '/run/latest',
+                '/explain/latest',
+                '/index',
+                '/capabilities',
                 ],
                 'description' => 'Runtime inspection and orchestration API for Factory.',
             ]
