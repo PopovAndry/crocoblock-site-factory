@@ -46,8 +46,101 @@ add_action(
                 'permission_callback' => '__return_true',
             ]
         );
+        register_rest_route(
+            'factory/v1',
+            '/explain/latest',
+            [
+                'methods'             => 'GET',
+                'callback'            => 'factory_rest_explain_latest',
+                'permission_callback' => '__return_true',
+            ]
+        );
 	}
 );
+
+    function factory_rest_explain_latest(): WP_REST_Response {
+
+        $latest = factory_get_latest_run_name();
+
+        if ( ! $latest ) {
+            return new WP_REST_Response(
+                [
+                    'status'  => 'error',
+                    'message' => 'No runs found.',
+                ],
+                404
+            );
+        }
+
+        $run = factory_get_run_manifest( $latest );
+
+        if ( ! is_array( $run ) ) {
+            return new WP_REST_Response(
+                [
+                    'status'  => 'error',
+                    'message' => 'Invalid run manifest.',
+                ],
+                500
+            );
+        }
+
+        $blueprint = $run['blueprint'] ?? [];
+
+        $response = [
+            'site'         => $blueprint['site']['name'] ?? '',
+            'cpt'          => [],
+            'taxonomies'   => [],
+            'listings'     => [],
+            'archive'      => '',
+            'demo_content' => [],
+        ];
+
+        foreach ( $blueprint['cpt'] ?? [] as $cpt ) {
+
+            $response['cpt'][] = [
+                'slug' => $cpt['slug'] ?? '',
+                'meta' => array_map(
+                    static fn( $field ) => $field['key'] ?? '',
+                    $cpt['meta'] ?? []
+                ),
+            ];
+        }
+
+        foreach ( $blueprint['taxonomies'] ?? [] as $taxonomy ) {
+
+            $response['taxonomies'][] =
+                $taxonomy['slug'] ?? '';
+        }
+
+        foreach ( $blueprint['listings'] ?? [] as $listing ) {
+
+            $response['listings'][] =
+                $listing['title'] ?? '';
+        }
+
+        $archive =
+            $blueprint['pages']['archive']['slug']
+            ?? '';
+
+        if ( $archive ) {
+            $response['archive'] =
+                '/' . trim( $archive, '/' ) . '/';
+        }
+
+        foreach (
+            $blueprint['content'] ?? []
+            as $items
+        ) {
+
+            foreach ( $items as $item ) {
+
+                $response['demo_content'][] =
+                    $item['title'] ?? '';
+            }
+        }
+
+        return new WP_REST_Response( $response );
+    }
 
 function factory_rest_summary(): WP_REST_Response {
 
