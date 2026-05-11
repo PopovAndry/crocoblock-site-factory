@@ -23,17 +23,8 @@ class Factory_Fix_Command {
 
 		$only = $assoc_args['only'] ?? null;
 
-		$only_map = [
-			'plugins'  => Factory_Plugin_Adapter::class,
-			'theme'    => Factory_Theme_Adapter::class,
-			'taxonomy' => Factory_Taxonomy_Adapter::class,
-			'core'     => Factory_WP_Core_Adapter::class,
-			'meta'     => Factory_JetEngine_Adapter::class,
-			'listings' => Factory_JetEngine_Listing_Adapter::class,
-			'render'   => Factory_Render_Adapter::class,
-			'single'   => Factory_Single_Adapter::class,
-			'content'  => Factory_Content_Adapter::class,
-		];
+		$registry = new Factory_Adapter_Registry();
+		$only_map = $registry->get_adapter_keys();
 
 		if ( $only && isset( $only_map[ $only ] ) ) {
 			$only = $only_map[ $only ];
@@ -155,34 +146,8 @@ class Factory_Fix_Command {
 	}
 
 	private function expand_dependencies( array $changed_classes ): array {
-		$dependencies = [
-			Factory_Content_Adapter::class => [
-				Factory_Taxonomy_Adapter::class,
-				Factory_WP_Core_Adapter::class,
-				Factory_Content_Adapter::class,
-			],
-
-			Factory_JetEngine_Adapter::class => [
-				Factory_WP_Core_Adapter::class,
-				Factory_JetEngine_Adapter::class,
-			],
-
-			Factory_JetEngine_Listing_Adapter::class => [
-				Factory_WP_Core_Adapter::class,
-				Factory_JetEngine_Adapter::class,
-				Factory_JetEngine_Listing_Adapter::class,
-			],
-
-			Factory_Render_Adapter::class => [
-				Factory_JetEngine_Listing_Adapter::class,
-				Factory_Render_Adapter::class,
-			],
-
-			Factory_Single_Adapter::class => [
-				Factory_WP_Core_Adapter::class,
-				Factory_Single_Adapter::class,
-			],
-		];
+		$registry     = new Factory_Adapter_Registry();
+		$dependencies = $registry->get_dependencies();
 
 		$result = [];
 
