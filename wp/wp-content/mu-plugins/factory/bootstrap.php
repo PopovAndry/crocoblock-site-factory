@@ -38,6 +38,7 @@ require_once __DIR__ . '/commands/latest.php';
 require_once __DIR__ . '/commands/explain.php';
 require_once __DIR__ . '/commands/summary.php';
 require_once __DIR__ . '/commands/commands.php';
+require_once __DIR__ . '/api/rest.php';
 
 function factory_get_blueprint(): array {
 	$blueprint = get_option( FACTORY_BLUEPRINT_OPTION );
