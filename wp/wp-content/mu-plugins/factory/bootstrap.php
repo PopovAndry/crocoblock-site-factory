@@ -16,6 +16,7 @@ require_once __DIR__ . '/adapters/render-adapter.php';
 require_once __DIR__ . '/adapters/single-adapter.php';
 require_once __DIR__ . '/adapters/taxonomy-adapter.php';
 require_once __DIR__ . '/adapters/content-adapter.php';
+require_once __DIR__ . '/adapter-registry.php';
 require_once __DIR__ . '/utils/diff.php';
 require_once __DIR__ . '/utils/diff-report.php';
 require_once __DIR__ . '/utils/run-manifest.php';
@@ -57,17 +58,9 @@ function factory_get_blueprint(): array {
 }
 
 function factory_get_adapters(): array {
-	return [
-		new Factory_Plugin_Adapter(),
-		new Factory_Theme_Adapter(),
-		new Factory_Taxonomy_Adapter(),
-		new Factory_WP_Core_Adapter(),
-		new Factory_JetEngine_Adapter(),
-		new Factory_JetEngine_Listing_Adapter(),
-		new Factory_Render_Adapter(),
-		new Factory_Single_Adapter(),
-		new Factory_Content_Adapter(),
-	];
+	$registry = new Factory_Adapter_Registry();
+
+	return $registry->get_adapters();
 }
 
 add_action( 'init', function () {
