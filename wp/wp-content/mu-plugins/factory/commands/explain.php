@@ -32,6 +32,96 @@ class Factory_Explain_Command {
 		}
 
 		$blueprint = $run['blueprint'] ?? [];
+        $format  = $assoc_args['format'] ?? 'text';
+        $is_json = 'json' === $format;
+
+        if ( $is_json ) {
+
+	$result = [
+		'site'        => $blueprint['site']['name'] ?? '',
+		'cpt'         => [],
+		'taxonomies'  => [],
+		'listings'    => [],
+		'archive'     => null,
+		'demo_content'=> [],
+	];
+
+	foreach ( $blueprint['cpt'] ?? [] as $cpt ) {
+
+		$item = [
+			'slug'  => $cpt['slug'] ?? '',
+			'meta'  => [],
+		];
+
+		foreach ( $cpt['meta'] ?? [] as $field ) {
+
+			if ( empty( $field['key'] ) ) {
+				continue;
+			}
+
+			$item['meta'][] = $field['key'];
+		}
+
+		$result['cpt'][] = $item;
+	}
+
+	foreach ( $blueprint['taxonomies'] ?? [] as $taxonomy ) {
+
+		if ( empty( $taxonomy['slug'] ) ) {
+			continue;
+		}
+
+		$result['taxonomies'][] =
+			$taxonomy['slug'];
+	}
+
+	foreach ( $blueprint['listings'] ?? [] as $listing ) {
+
+		if ( empty( $listing['title'] ) ) {
+			continue;
+		}
+
+		$result['listings'][] =
+			$listing['title'];
+	}
+
+	$archive =
+		$blueprint['pages']['archive']['slug']
+		?? '';
+
+	if ( $archive ) {
+
+		$result['archive'] =
+			"/{$archive}/";
+	}
+
+	foreach ( $blueprint['content'] ?? [] as $items ) {
+
+		if ( ! is_array( $items ) ) {
+			continue;
+		}
+
+		foreach ( $items as $item ) {
+
+			if ( empty( $item['title'] ) ) {
+				continue;
+			}
+
+			$result['demo_content'][] =
+				$item['title'];
+		}
+	}
+
+	WP_CLI::line(
+		wp_json_encode(
+			$result,
+			JSON_PRETTY_PRINT |
+			JSON_UNESCAPED_UNICODE
+		)
+	);
+
+	return;
+}
 
 		WP_CLI::log( '' );
 		WP_CLI::log( 'Factory Explain' );
