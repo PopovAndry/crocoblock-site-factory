@@ -8,6 +8,16 @@ add_action(
 	'rest_api_init',
 	static function () {
 
+            register_rest_route(
+            'factory/v1',
+            '/validate',
+            [
+                'methods'             => 'POST',
+                'callback'            => 'factory_rest_validate',
+                'permission_callback' => '__return_true',
+            ]
+        );
+
 		register_rest_route(
 			'factory/v1',
 			'/summary',
@@ -75,6 +85,51 @@ add_action(
         );
 	}
 );
+
+    function factory_rest_validate(): WP_REST_Response {
+
+        $latest = factory_get_latest_run_name();
+
+        if ( ! $latest ) {
+
+            return new WP_REST_Response(
+                [
+                    'status'  => 'error',
+                    'message' => 'No runs found.',
+                ],
+                404
+            );
+        }
+
+        $run = factory_get_run_manifest( $latest );
+
+        if ( ! is_array( $run ) ) {
+
+            return new WP_REST_Response(
+                [
+                    'status'  => 'error',
+                    'message' => 'Invalid run manifest.',
+                ],
+                500
+            );
+        }
+
+        $blueprint =
+            $run['blueprint'] ?? [];
+
+        $result =
+            factory_validate_blueprint_state(
+                $blueprint,
+                false
+            );
+
+        return new WP_REST_Response(
+            [
+                'status' => $result['status'] ?? 'error',
+                'checks' => $result['checks'] ?? [],
+            ]
+        );
+    }
 
     function factory_rest_capabilities(): WP_REST_Response {
 
