@@ -37,6 +37,15 @@ add_action(
 				'permission_callback' => '__return_true',
 			]
 		);
+            register_rest_route(
+            'factory/v1',
+            '/run/latest',
+            [
+                'methods'             => 'GET',
+                'callback'            => 'factory_rest_latest_run',
+                'permission_callback' => '__return_true',
+            ]
+        );
 	}
 );
 
@@ -166,6 +175,40 @@ function factory_rest_doctor(): WP_REST_Response {
 		]
 	);
 }
+
+    function factory_rest_latest_run(): WP_REST_Response {
+
+        $latest = factory_get_latest_run_name();
+
+        if ( ! $latest ) {
+            return new WP_REST_Response(
+                [
+                    'status'  => 'error',
+                    'message' => 'No runs found.',
+                ],
+                404
+            );
+        }
+
+        $run = factory_get_run_manifest( $latest );
+
+        if ( ! is_array( $run ) ) {
+            return new WP_REST_Response(
+                [
+                    'status'  => 'error',
+                    'message' => 'Invalid run manifest.',
+                ],
+                500
+            );
+        }
+
+        return new WP_REST_Response(
+            [
+                'status' => 'ok',
+                'run'    => $run,
+            ]
+        );
+    }
 
 function factory_rest_runs( WP_REST_Request $request ): WP_REST_Response {
 
