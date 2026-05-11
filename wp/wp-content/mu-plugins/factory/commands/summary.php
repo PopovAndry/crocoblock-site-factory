@@ -43,6 +43,8 @@ class Factory_Summary_Command {
 				$blueprint,
 				false
 			);
+            $format  = $assoc_args['format'] ?? 'text';
+            $is_json = 'json' === $format;
 
 		$state =
 			( $current['status'] ?? 'error' )
@@ -78,6 +80,32 @@ class Factory_Summary_Command {
 					count( $items );
 			}
 		}
+
+        if ( $is_json ) {
+
+            WP_CLI::line(
+                wp_json_encode(
+                    [
+                        'status'        => $state,
+                        'latest_run'    => $latest,
+                        'site'          => $blueprint['site']['name'] ?? '-',
+                        'cpt_count'     => $cpt_count,
+                        'taxonomy_count'=> $taxonomy_count,
+                        'listing_count' => $listing_count,
+                        'content_count' => $content_count,
+                        'doctor'        => (
+                            $state === 'IN SYNC'
+                                ? 'healthy'
+                                : 'issues detected'
+                        ),
+                    ],
+                    JSON_PRETTY_PRINT |
+                    JSON_UNESCAPED_UNICODE
+                )
+            );
+
+            return;
+        }
 
 		WP_CLI::log( '' );
 		WP_CLI::log( 'Factory Summary' );
