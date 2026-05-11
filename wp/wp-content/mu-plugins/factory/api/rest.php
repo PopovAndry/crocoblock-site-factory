@@ -55,8 +55,36 @@ add_action(
                 'permission_callback' => '__return_true',
             ]
         );
+        register_rest_route(
+            'factory/v1',
+            '/index',
+            [
+                'methods'             => 'GET',
+                'callback'            => 'factory_rest_index',
+                'permission_callback' => '__return_true',
+            ]
+        );
 	}
 );
+
+    function factory_rest_index(): WP_REST_Response {
+
+        return new WP_REST_Response(
+            [
+                'name'        => 'Crocoblock Site Factory API',
+                'version'     => '1.0',
+                'status'      => 'active',
+                'endpoints'   => [
+                    '/summary',
+                    '/doctor',
+                    '/runs',
+                    '/run/latest',
+                    '/explain/latest',
+                ],
+                'description' => 'Runtime inspection and orchestration API for Factory.',
+            ]
+        );
+    }
 
     function factory_rest_explain_latest(): WP_REST_Response {
 
