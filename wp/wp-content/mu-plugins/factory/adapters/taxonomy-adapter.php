@@ -30,7 +30,7 @@ class Factory_Taxonomy_Adapter {
 				continue;
 			}
 
-			$this->register_taxonomy( $tax );
+			$this->register_taxonomy( $tax, false );
 		}
 	}
 
@@ -42,7 +42,7 @@ class Factory_Taxonomy_Adapter {
                 continue;
             }
 
-            $this->register_taxonomy( $tax );
+            $this->register_taxonomy( $tax, true );
             $this->sync_terms( $tax );
         }
     }
@@ -185,7 +185,7 @@ private function get_current_terms_state( string $taxonomy ): array {
 	return $terms;
 }
 
-	private function register_taxonomy( array $tax ): void {
+	private function register_taxonomy( array $tax, bool $log = false ): void {
 
 		$slug       = $tax['slug'];
 		$post_type  = $tax['post_type'];
@@ -221,7 +221,7 @@ private function get_current_terms_state( string $taxonomy ): array {
             ] );
 
         } else {
-            if ( defined('WP_CLI') && WP_CLI ) {
+            if ( $log && defined('WP_CLI') && WP_CLI ) {
                 WP_CLI::log("Taxonomy up-to-date: {$slug}");
             }
         }
