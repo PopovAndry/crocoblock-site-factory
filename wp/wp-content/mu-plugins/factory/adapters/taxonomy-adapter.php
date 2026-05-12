@@ -14,7 +14,7 @@ class Factory_Taxonomy_Adapter {
 				continue;
 			}
 
-			$this->register_taxonomy( $tax );
+			$this->register_taxonomy( $tax, false );
 		}
 	}
 
@@ -26,7 +26,7 @@ class Factory_Taxonomy_Adapter {
 				continue;
 			}
 
-			$this->register_taxonomy( $tax );
+			$this->register_taxonomy( $tax, true );
 			$this->sync_terms( $tax );
 		}
 	}
@@ -189,7 +189,7 @@ class Factory_Taxonomy_Adapter {
 		return $terms;
 	}
 
-	private function register_taxonomy( array $tax ): void {
+	private function register_taxonomy( array $tax, bool $log = false ): void {
 
 		$slug      = $tax['slug'];
 		$post_type = $tax['post_type'];
@@ -226,14 +226,14 @@ class Factory_Taxonomy_Adapter {
 				]
 			);
 
-			if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			if ( $log && defined( 'WP_CLI' ) && WP_CLI ) {
 				WP_CLI::log( "Taxonomy registered: {$slug}" );
 			}
 
 			return;
 		}
 
-		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+		if ( $log && defined( 'WP_CLI' ) && WP_CLI ) {
 			WP_CLI::log( "Taxonomy up-to-date: {$slug}" );
 		}
 	}
@@ -247,7 +247,8 @@ class Factory_Taxonomy_Adapter {
 		}
 
 		$current_terms = $this->get_current_terms_state( $slug );
-		$target_terms  = array_values(
+
+		$target_terms = array_values(
 			array_filter(
 				array_map(
 					[ $this, 'normalize_term_name' ],
