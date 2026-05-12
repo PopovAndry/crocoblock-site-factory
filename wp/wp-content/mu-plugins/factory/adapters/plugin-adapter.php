@@ -64,6 +64,76 @@ class Factory_Plugin_Adapter {
 		}
 	}
 
+	public function plan( array $blueprint ): array {
+		$plan = [];
+
+		foreach ( $blueprint['plugins'] ?? [] as $plugin_config ) {
+			$plugin = $this->normalize_plugin_config( $plugin_config );
+
+			if ( empty( $plugin['slug'] ) ) {
+				$plan[] = [
+					'action'  => 'error',
+					'message' => 'Plugin slug is missing.',
+					'diff'    => [],
+				];
+
+				continue;
+			}
+
+			$slug = $plugin['slug'];
+
+			if ( $this->is_active( $slug ) ) {
+				$plan[] = [
+					'action'  => 'skip',
+					'message' => "Plugin active: {$slug}",
+					'diff'    => [],
+				];
+
+				continue;
+			}
+
+			if ( $this->exists( $slug ) ) {
+				$plan[] = [
+					'action'  => $plugin['activate'] ? 'warning' : 'skip',
+					'message' => $plugin['activate']
+						? "Plugin installed but not active: {$slug}"
+						: "Plugin installed: {$slug}",
+					'diff'    => [],
+				];
+
+				continue;
+			}
+
+			$source = $this->get_install_source( $plugin );
+
+			if ( $source ) {
+				$plan[] = [
+					'action'  => 'create',
+					'message' => "Install plugin: {$slug}",
+					'diff'    => [
+						'installed' => [
+							'old' => false,
+							'new' => true,
+						],
+						'source'    => [
+							'value' => $source,
+						],
+					],
+				];
+
+				continue;
+			}
+
+			$plan[] = [
+				'action'  => 'error',
+				'message' => "Plugin missing: {$slug}",
+				'diff'    => [],
+			];
+		}
+
+		return $plan;
+	}
+
 	public function validate( array $blueprint ): array {
 		$checks = [];
 
@@ -142,6 +212,16 @@ class Factory_Plugin_Adapter {
 
 	private function exists( string $slug ): bool {
 		return is_dir( WP_PLUGIN_DIR . '/' . $slug );
+	}
+
+	private function get_install_source( array $plugin ): string {
+		if ( ! empty( $plugin['path'] ) && file_exists( $plugin['path'] ) ) {
+			return $plugin['path'];
+		}
+
+		$fallback_zip = "/var/www/plugins/{$plugin['slug']}.zip";
+
+		return file_exists( $fallback_zip ) ? $fallback_zip : '';
 	}
 
 	private function install_from_path( string $slug, string $path ): void {

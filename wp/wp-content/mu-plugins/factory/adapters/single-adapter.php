@@ -14,6 +14,24 @@ class Factory_Single_Adapter {
 		// Runtime rendering only.
 	}
 
+	public function plan( array $blueprint ): array {
+		$plan = [];
+
+		foreach ( $blueprint['single'] ?? [] as $post_type => $config ) {
+			$exists = post_type_exists( $post_type );
+
+			$plan[] = [
+				'action'  => $exists ? 'skip' : 'error',
+				'message' => $exists
+					? "Single template registered for: {$post_type}"
+					: "Single template post type missing: {$post_type}",
+				'diff'    => [],
+			];
+		}
+
+		return $plan;
+	}
+
 	public function validate( array $blueprint ): array {
 		$checks = [];
 

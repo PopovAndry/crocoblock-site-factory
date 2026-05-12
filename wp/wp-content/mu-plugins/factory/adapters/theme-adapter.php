@@ -53,6 +53,77 @@ class Factory_Theme_Adapter {
 		);
 	}
 
+	public function plan( array $blueprint ): array {
+		if ( empty( $blueprint['theme'] ) ) {
+			return [];
+		}
+
+		$config = $blueprint['theme'];
+		$slug   = $config['slug'] ?? '';
+		$path   = $config['path'] ?? '';
+
+		if ( ! $slug ) {
+			return [
+				[
+					'action'  => 'error',
+					'message' => 'Theme slug is missing.',
+					'diff'    => [],
+				],
+			];
+		}
+
+		if ( wp_get_theme()->get_stylesheet() === $slug ) {
+			return [
+				[
+					'action'  => 'skip',
+					'message' => "Theme active: {$slug}",
+					'diff'    => [],
+				],
+			];
+		}
+
+		if ( wp_get_theme( $slug )->exists() ) {
+			return [
+				[
+					'action'  => 'update',
+					'message' => "Activate theme: {$slug}",
+					'diff'    => [
+						'active_theme' => [
+							'old' => wp_get_theme()->get_stylesheet(),
+							'new' => $slug,
+						],
+					],
+				],
+			];
+		}
+
+		if ( $path && file_exists( $path ) ) {
+			return [
+				[
+					'action'  => 'create',
+					'message' => "Install theme: {$slug}",
+					'diff'    => [
+						'installed' => [
+							'old' => false,
+							'new' => true,
+						],
+						'source'    => [
+							'value' => $path,
+						],
+					],
+				],
+			];
+		}
+
+		return [
+			[
+				'action'  => 'error',
+				'message' => "Theme missing: {$slug}",
+				'diff'    => [],
+			],
+		];
+	}
+
 	public function validate( array $blueprint ): array {
 
 		$checks = [];
