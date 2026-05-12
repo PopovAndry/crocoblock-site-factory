@@ -71,13 +71,46 @@ class Factory_Adapter_Registry {
 		foreach ( $this->get_adapter_keys() as $key => $class ) {
 			$capabilities[ $key ] = [
 				'class'        => $class,
-				'has_register' => method_exists( $class, 'register' ),
-				'has_apply'    => method_exists( $class, 'apply' ),
-				'has_validate' => method_exists( $class, 'validate' ),
-				'has_plan'     => method_exists( $class, 'plan' ),
+				'has_register' => $this->has_public_method( $class, 'register' ),
+				'has_apply'    => $this->has_public_method( $class, 'apply' ),
+				'has_validate' => $this->has_public_method( $class, 'validate' ),
+				'has_plan'     => $this->has_public_method( $class, 'plan' ),
 			];
 		}
 
 		return $capabilities;
+	}
+
+	public function get_contract_report(): array {
+		$report = [];
+
+		foreach ( $this->get_adapter_capabilities() as $key => $capabilities ) {
+			$contract_ready = $capabilities['has_register']
+				&& $capabilities['has_apply']
+				&& $capabilities['has_validate']
+				&& $capabilities['has_plan'];
+
+			$report[] = [
+				'key'            => $key,
+				'class'          => $capabilities['class'],
+				'has_register'   => $capabilities['has_register'],
+				'has_apply'      => $capabilities['has_apply'],
+				'has_validate'   => $capabilities['has_validate'],
+				'has_plan'       => $capabilities['has_plan'],
+				'contract_ready' => $contract_ready,
+			];
+		}
+
+		return $report;
+	}
+
+	private function has_public_method( string $class, string $method ): bool {
+		if ( ! method_exists( $class, $method ) ) {
+			return false;
+		}
+
+		$reflection = new ReflectionMethod( $class, $method );
+
+		return $reflection->isPublic();
 	}
 }

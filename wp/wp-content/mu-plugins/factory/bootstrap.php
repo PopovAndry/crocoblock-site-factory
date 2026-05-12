@@ -40,6 +40,7 @@ require_once __DIR__ . '/commands/latest.php';
 require_once __DIR__ . '/commands/explain.php';
 require_once __DIR__ . '/commands/summary.php';
 require_once __DIR__ . '/commands/commands.php';
+require_once __DIR__ . '/commands/adapters.php';
 require_once __DIR__ . '/api/rest.php';
 
 function factory_get_blueprint(): array {
@@ -188,6 +189,10 @@ function factory_log_diff_report(): void {
 		WP_CLI::add_command(
 		'factory commands',
 		'Factory_Commands_Command'
+	);
+	WP_CLI::add_command(
+		'factory adapters',
+		Factory_Adapters_Command::class
 	);
 
 	WP_CLI::add_command( 'factory validate-blueprint', function ( $args ) {

@@ -21,6 +21,11 @@ class Factory_Commands_Command {
 			],
 
 			[
+				'command'     => 'adapters',
+				'description' => 'Audit adapter contract readiness',
+			],
+
+			[
 				'command'     => 'validate',
 				'description' => 'Validate current state',
 			],
