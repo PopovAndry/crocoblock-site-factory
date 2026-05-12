@@ -76,6 +76,15 @@ add_action(
         );
         register_rest_route(
             'factory/v1',
+            '/adapters',
+            [
+                'methods'             => 'GET',
+                'callback'            => 'factory_rest_adapters',
+                'permission_callback' => '__return_true',
+            ]
+        );
+        register_rest_route(
+            'factory/v1',
             '/capabilities',
             [
                 'methods'             => 'GET',
@@ -132,6 +141,8 @@ add_action(
     }
 
     function factory_rest_capabilities(): WP_REST_Response {
+        $registry = new Factory_Adapter_Registry();
+        $adapters = $registry->get_contract_report();
 
         return new WP_REST_Response(
             [
@@ -160,6 +171,8 @@ add_action(
                     'reset',
                 ],
 
+                'adapter_contract_ready' => factory_rest_adapters_contract_ready( $adapters ),
+
                 'adapters' => [
                     'plugins',
                     'theme',
@@ -174,6 +187,28 @@ add_action(
             ]
         );
     }
+
+    function factory_rest_adapters(): WP_REST_Response {
+        $registry = new Factory_Adapter_Registry();
+
+        return new WP_REST_Response(
+            [
+                'status'   => 'ok',
+                'adapters' => $registry->get_contract_report(),
+            ]
+        );
+    }
+
+    function factory_rest_adapters_contract_ready( array $adapters ): bool {
+        foreach ( $adapters as $adapter ) {
+            if ( empty( $adapter['contract_ready'] ) ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     function factory_rest_index(): WP_REST_Response {
 
         return new WP_REST_Response(
@@ -189,6 +224,7 @@ add_action(
                 '/explain/latest',
                 '/index',
                 '/capabilities',
+                '/adapters',
                 ],
                 'description' => 'Runtime inspection and orchestration API for Factory.',
             ]
