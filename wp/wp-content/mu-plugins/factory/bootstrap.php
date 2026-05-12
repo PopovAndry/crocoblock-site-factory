@@ -7,6 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 const FACTORY_BLUEPRINT_PATH   = '/var/www/blueprints/real-estate.json';
 const FACTORY_BLUEPRINT_OPTION = 'factory_blueprint';
 
+require_once __DIR__ . '/contracts/adapter-interface.php';
 require_once __DIR__ . '/adapters/plugin-adapter.php';
 require_once __DIR__ . '/adapters/wp-core-adapter.php';
 require_once __DIR__ . '/adapters/theme-adapter.php';

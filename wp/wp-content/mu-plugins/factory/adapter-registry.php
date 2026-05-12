@@ -64,4 +64,20 @@ class Factory_Adapter_Registry {
 			],
 		];
 	}
+
+	public function get_adapter_capabilities(): array {
+		$capabilities = [];
+
+		foreach ( $this->get_adapter_keys() as $key => $class ) {
+			$capabilities[ $key ] = [
+				'class'        => $class,
+				'has_register' => method_exists( $class, 'register' ),
+				'has_apply'    => method_exists( $class, 'apply' ),
+				'has_validate' => method_exists( $class, 'validate' ),
+				'has_plan'     => method_exists( $class, 'plan' ),
+			];
+		}
+
+		return $capabilities;
+	}
 }
