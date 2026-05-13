@@ -233,7 +233,18 @@ class Factory_Taxonomy_Adapter {
 		);
 
 		if ( empty( $current ) || ! empty( $diff ) ) {
-			$action = empty( $current ) ? 'create' : 'update';
+			$execution_diff = factory_diff_arrays(
+				$this->get_execution_taxonomy_state( $current ),
+				[
+					'slug'         => $slug,
+					'hierarchical' => true,
+					'show_in_rest' => true,
+				]
+			);
+
+			$action = empty( $current )
+				? 'create'
+				: ( empty( $execution_diff ) ? 'skip' : 'update' );
 
 			register_taxonomy(
 				$slug,
@@ -260,7 +271,7 @@ class Factory_Taxonomy_Adapter {
 				'taxonomy',
 				$slug,
 				taxonomy_exists( $slug )
-					? ( 'create' === $action ? "Taxonomy registered: {$slug}" : "Taxonomy re-registered: {$slug}" )
+					? $this->taxonomy_execution_message( $slug, $action )
 					: "Taxonomy registration failed: {$slug}"
 			);
 		}
@@ -402,6 +413,30 @@ class Factory_Taxonomy_Adapter {
 		}
 
 		return trim( $term );
+	}
+
+	private function get_execution_taxonomy_state( array $state ): array {
+		if ( empty( $state ) ) {
+			return [];
+		}
+
+		return [
+			'slug'         => $state['slug'] ?? '',
+			'hierarchical' => (bool) ( $state['hierarchical'] ?? false ),
+			'show_in_rest' => (bool) ( $state['show_in_rest'] ?? false ),
+		];
+	}
+
+	private function taxonomy_execution_message( string $slug, string $action ): string {
+		if ( 'create' === $action ) {
+			return "Taxonomy registered: {$slug}";
+		}
+
+		if ( 'update' === $action ) {
+			return "Taxonomy re-registered: {$slug}";
+		}
+
+		return "Taxonomy up-to-date: {$slug}";
 	}
 
 	private function execution_item(
