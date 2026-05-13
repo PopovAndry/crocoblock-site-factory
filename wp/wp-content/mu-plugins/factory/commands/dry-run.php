@@ -10,7 +10,8 @@ class Factory_Dry_Run_Command {
 		$all_items = [];
 
 		foreach ( factory_get_adapters() as $adapter ) {
-			$class = get_class( $adapter );
+			$class         = get_class( $adapter );
+			$adapter_label = $this->format_adapter_name( $class );
 
 			if ( method_exists( $adapter, 'plan' ) ) {
 				$items = $adapter->plan( $blueprint );
@@ -21,13 +22,7 @@ class Factory_Dry_Run_Command {
 			}
 
 			foreach ( $items as $item ) {
-				$all_items[] = [
-					'adapter_class' => $class,
-					'adapter'       => $this->format_adapter_name( $class ),
-					'action'        => $item['action'] ?? 'skip',
-					'message'       => $item['message'] ?? '',
-					'diff'          => $item['diff'] ?? [],
-				];
+				$all_items[] = $this->normalize_plan_item( $item, $class, $adapter_label );
 			}
 		}
 
@@ -79,7 +74,8 @@ class Factory_Dry_Run_Command {
 		}
 
 		foreach ( factory_get_adapters() as $adapter ) {
-			$class = get_class( $adapter );
+			$class         = get_class( $adapter );
+			$adapter_label = $this->format_adapter_name( $class );
 
 			if ( $only && $class !== $only ) {
 				continue;
@@ -100,8 +96,9 @@ class Factory_Dry_Run_Command {
 			$visible_items = [];
 
 			foreach ( $items as $item ) {
-				$action    = $item['action'] ?? 'skip';
-				$message   = $item['message'] ?? '';
+				$item      = $this->normalize_plan_item( $item, $class, $adapter_label );
+				$action    = $item['action'];
+				$message   = $item['message'];
 				$is_change = in_array( $action, [ 'create', 'update', 'error', 'warning' ], true );
 
 				if ( isset( $summary[ $action ] ) ) {
@@ -110,13 +107,7 @@ class Factory_Dry_Run_Command {
 
 				if ( ! $only_changes || $is_change ) {
 					$visible_items[] = $item;
-
-					$all_items[] = [
-						'adapter' => $this->format_adapter_name( $class ),
-						'action'  => $action,
-						'message' => $message,
-						'diff'    => $item['diff'] ?? [],
-					];
+					$all_items[]     = $item;
 				}
 			}
 
@@ -125,7 +116,7 @@ class Factory_Dry_Run_Command {
 			}
 
 			if ( ! $is_json ) {
-				WP_CLI::log( $this->format_adapter_name( $class ) );
+				WP_CLI::log( $adapter_label );
 			}
 
 			foreach ( $visible_items as $item ) {
@@ -235,6 +226,32 @@ class Factory_Dry_Run_Command {
 		}
 
 		return $items;
+	}
+
+	private function normalize_plan_item( array $item, string $adapter_class, string $adapter_label ): array {
+		$normalized = $item;
+		$diff       = $item['diff'] ?? [];
+
+		$normalized['adapter_class'] = $adapter_class;
+		$normalized['adapter']       = $adapter_label;
+		$normalized['action']        = $item['action'] ?? 'skip';
+		$normalized['type']          = $item['type'] ?? $this->get_adapter_key( $adapter_class, $adapter_label );
+		$normalized['entity']        = $item['entity'] ?? '';
+		$normalized['message']       = $item['message'] ?? '';
+		$normalized['diff']          = is_array( $diff ) ? $diff : [];
+
+		return $normalized;
+	}
+
+	private function get_adapter_key( string $adapter_class, string $adapter_label ): string {
+		static $keys_by_class = null;
+
+		if ( null === $keys_by_class ) {
+			$registry      = new Factory_Adapter_Registry();
+			$keys_by_class = array_flip( $registry->get_adapter_keys() );
+		}
+
+		return $keys_by_class[ $adapter_class ] ?? $adapter_label;
 	}
 
 	private function format_action( string $action ): string {
