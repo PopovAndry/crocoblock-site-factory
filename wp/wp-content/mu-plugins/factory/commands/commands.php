@@ -36,6 +36,11 @@ class Factory_Commands_Command {
 			],
 
 			[
+				'command'     => 'health',
+				'description' => 'Check runtime environment health',
+			],
+
+			[
 				'command'     => 'summary',
 				'description' => 'Show factory overview',
 			],
