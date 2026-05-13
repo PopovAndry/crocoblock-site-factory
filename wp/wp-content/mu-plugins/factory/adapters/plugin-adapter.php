@@ -73,6 +73,8 @@ class Factory_Plugin_Adapter {
 			if ( empty( $plugin['slug'] ) ) {
 				$plan[] = [
 					'action'  => 'error',
+					'type'    => 'plugin',
+					'entity'  => '',
 					'message' => 'Plugin slug is missing.',
 					'diff'    => [],
 				];
@@ -85,6 +87,8 @@ class Factory_Plugin_Adapter {
 			if ( $this->is_active( $slug ) ) {
 				$plan[] = [
 					'action'  => 'skip',
+					'type'    => 'plugin',
+					'entity'  => $slug,
 					'message' => "Plugin active: {$slug}",
 					'diff'    => [],
 				];
@@ -95,6 +99,8 @@ class Factory_Plugin_Adapter {
 			if ( $this->exists( $slug ) ) {
 				$plan[] = [
 					'action'  => $plugin['activate'] ? 'warning' : 'skip',
+					'type'    => 'plugin',
+					'entity'  => $slug,
 					'message' => $plugin['activate']
 						? "Plugin installed but not active: {$slug}"
 						: "Plugin installed: {$slug}",
@@ -109,6 +115,8 @@ class Factory_Plugin_Adapter {
 			if ( $source ) {
 				$plan[] = [
 					'action'  => 'create',
+					'type'    => 'plugin',
+					'entity'  => $slug,
 					'message' => "Install plugin: {$slug}",
 					'diff'    => [
 						'installed' => [
@@ -126,6 +134,8 @@ class Factory_Plugin_Adapter {
 
 			$plan[] = [
 				'action'  => 'error',
+				'type'    => 'plugin',
+				'entity'  => $slug,
 				'message' => "Plugin missing: {$slug}",
 				'diff'    => [],
 			];

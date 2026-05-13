@@ -22,6 +22,8 @@ class Factory_Single_Adapter {
 
 			$plan[] = [
 				'action'  => $exists ? 'skip' : 'error',
+				'type'    => 'single',
+				'entity'  => $post_type,
 				'message' => $exists
 					? "Single template registered for: {$post_type}"
 					: "Single template post type missing: {$post_type}",

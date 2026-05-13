@@ -66,6 +66,8 @@ class Factory_Theme_Adapter {
 			return [
 				[
 					'action'  => 'error',
+					'type'    => 'theme',
+					'entity'  => '',
 					'message' => 'Theme slug is missing.',
 					'diff'    => [],
 				],
@@ -76,6 +78,8 @@ class Factory_Theme_Adapter {
 			return [
 				[
 					'action'  => 'skip',
+					'type'    => 'theme',
+					'entity'  => $slug,
 					'message' => "Theme active: {$slug}",
 					'diff'    => [],
 				],
@@ -86,6 +90,8 @@ class Factory_Theme_Adapter {
 			return [
 				[
 					'action'  => 'update',
+					'type'    => 'theme',
+					'entity'  => $slug,
 					'message' => "Activate theme: {$slug}",
 					'diff'    => [
 						'active_theme' => [
@@ -101,6 +107,8 @@ class Factory_Theme_Adapter {
 			return [
 				[
 					'action'  => 'create',
+					'type'    => 'theme',
+					'entity'  => $slug,
 					'message' => "Install theme: {$slug}",
 					'diff'    => [
 						'installed' => [
@@ -118,6 +126,8 @@ class Factory_Theme_Adapter {
 		return [
 			[
 				'action'  => 'error',
+				'type'    => 'theme',
+				'entity'  => $slug,
 				'message' => "Theme missing: {$slug}",
 				'diff'    => [],
 			],
