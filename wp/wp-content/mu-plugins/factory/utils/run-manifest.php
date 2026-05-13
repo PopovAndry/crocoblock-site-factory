@@ -37,6 +37,7 @@ function factory_save_run_manifest(
 		'blueprint'  => $blueprint,
 		'plan'       => $plan,
 		'validation' => $validation,
+		'results'    => factory_build_manifest_results( $validation ),
 	];
 
 	file_put_contents(
@@ -56,4 +57,47 @@ function factory_save_run_manifest(
 	}
 
 	return $path;
+}
+
+function factory_build_manifest_results( array $validation ): array {
+	$results = [
+		'version' => 1,
+		'source'  => 'validation',
+		'summary' => [
+			'ok'      => 0,
+			'warning' => 0,
+			'error'   => 0,
+		],
+		'items'   => [],
+	];
+
+	$checks = $validation['checks'] ?? [];
+
+	if ( ! is_array( $checks ) ) {
+		return $results;
+	}
+
+	foreach ( $checks as $check ) {
+		if ( ! is_array( $check ) ) {
+			continue;
+		}
+
+		$status = $check['status'] ?? '';
+
+		if ( ! in_array( $status, [ 'ok', 'warning', 'error' ], true ) ) {
+			continue;
+		}
+
+		$results['summary'][ $status ]++;
+		$results['items'][] = [
+			'stage'   => 'validation',
+			'status'  => $status,
+			'type'    => 'validation',
+			'entity'  => '',
+			'message' => $check['message'] ?? '',
+			'details' => [],
+		];
+	}
+
+	return $results;
 }
