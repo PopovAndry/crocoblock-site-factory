@@ -301,7 +301,7 @@ SYS;
 		factory_reset_diff_report();
 
 		WP_CLI::log( 'Applying blueprint...' );
-		factory_apply_blueprint( $blueprint );
+		$execution = factory_apply_blueprint( $blueprint );
 
 		factory_log_diff_report();
 
@@ -344,7 +344,8 @@ SYS;
 			$blueprint,
 			$plan,
 			$report,
-			'ok'
+			'ok',
+			$execution
 		);
 
 		WP_CLI::success(

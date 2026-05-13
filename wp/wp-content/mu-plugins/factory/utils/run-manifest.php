@@ -10,7 +10,8 @@ function factory_save_run_manifest(
 	array $blueprint,
 	array $plan,
 	array $validation,
-	string $status = 'success'
+	string $status = 'success',
+	array $execution = []
 ): string {
 
 	$upload_dir = wp_upload_dir();
@@ -38,6 +39,7 @@ function factory_save_run_manifest(
 		'plan'       => $plan,
 		'validation' => $validation,
 		'results'    => factory_build_manifest_results( $validation ),
+		'execution'  => factory_build_manifest_execution( $execution ),
 	];
 
 	file_put_contents(
@@ -100,4 +102,11 @@ function factory_build_manifest_results( array $validation ): array {
 	}
 
 	return $results;
+}
+
+function factory_build_manifest_execution( array $items ): array {
+	return [
+		'version' => 1,
+		'items'   => array_values( $items ),
+	];
 }

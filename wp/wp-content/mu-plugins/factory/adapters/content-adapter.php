@@ -6,16 +6,28 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Content_Adapter {
 
+	private array $execution_results = [];
+
 	public function register( array $blueprint ): void {
 		// Content is handled during apply/validate only.
 	}
 
 	public function apply( array $blueprint ): void {
+		$this->execution_results = [];
+
 		foreach ( $blueprint['content'] ?? [] as $post_type => $items ) {
 			foreach ( $items as $item ) {
-				$this->sync_post( $post_type, $item );
+				$result = $this->sync_post( $post_type, $item );
+
+				if ( is_array( $result ) ) {
+					$this->execution_results[] = $result;
+				}
 			}
 		}
+	}
+
+	public function get_execution_results(): array {
+		return $this->execution_results;
 	}
 
 public function plan( array $blueprint ): array {
@@ -152,11 +164,12 @@ public function plan( array $blueprint ): array {
 		return $results;
 	}
 
-	private function sync_post( string $post_type, array $item ): void {
+	private function sync_post( string $post_type, array $item ): ?array {
 		if ( empty( $item['title'] ) ) {
-			return;
+			return null;
 		}
 
+		$title = $item['title'];
 		$post = $this->find_post( $post_type, $item );
 
 		$target_state = $this->get_target_post_state( $item );
@@ -168,9 +181,23 @@ public function plan( array $blueprint ): array {
 				$this->sync_post_meta( $post_id, $item );
 				$this->sync_post_terms( $post_id, $item );
 				$this->log_success( "Created: {$item['title']}" );
+
+				return $this->execution_item(
+					'ok',
+					'create',
+					$post_type,
+					$title,
+					"Post created: {$title}"
+				);
 			}
             
-			return;
+			return $this->execution_item(
+				'error',
+				'create',
+				$post_type,
+				$title,
+				"Post create failed: {$title}"
+			);
 		}
 
 		$current_state = $this->get_current_post_state( $post, $item );
@@ -179,14 +206,39 @@ public function plan( array $blueprint ): array {
 
 		if ( empty( $diff ) ) {
 			$this->log( "Post up-to-date: {$item['title']}" );
-			return;
+
+			return $this->execution_item(
+				'ok',
+				'skip',
+				$post_type,
+				$title,
+				"Post skipped: {$title}"
+			);
 		}
 
-		$this->update_post( $post->ID, $post_type, $item );
+		$error = $this->update_post( $post->ID, $post_type, $item );
 		$this->sync_post_meta( $post->ID, $item );
 		$this->sync_post_terms( $post->ID, $item );
 
 		$this->log_success( "Updated: {$item['title']}" );
+
+		if ( $error ) {
+			return $this->execution_item(
+				'error',
+				'update',
+				$post_type,
+				$title,
+				"Post update failed: {$title}"
+			);
+		}
+
+		return $this->execution_item(
+			'ok',
+			'update',
+			$post_type,
+			$title,
+			"Post updated: {$title}"
+		);
 	}
 
 	private function create_post( string $post_type, array $item ): int {
@@ -207,7 +259,7 @@ public function plan( array $blueprint ): array {
 		return (int) $post_id;
 	}
 
-	private function update_post( int $post_id, string $post_type, array $item ): void {
+	private function update_post( int $post_id, string $post_type, array $item ): ?string {
 		$result = wp_update_post( [
 			'ID'           => $post_id,
 			'post_type'    => $post_type,
@@ -217,10 +269,33 @@ public function plan( array $blueprint ): array {
 		], true );
 
 		if ( is_wp_error( $result ) ) {
-			$this->warn( $result->get_error_message() );
-			return;
+			$message = $result->get_error_message();
+
+			$this->warn( $message );
+			return $message;
 		}
 		update_post_meta( $post_id, '_factory_source_key', $this->get_source_key( $post_type, $item ) );
+
+		return null;
+	}
+
+	private function execution_item(
+		string $status,
+		string $action,
+		string $post_type,
+		string $title,
+		string $message
+	): array {
+		$arrow = html_entity_decode( '&#8594;', ENT_QUOTES, 'UTF-8' );
+
+		return [
+			'status'  => $status,
+			'action'  => $action,
+			'type'    => 'content',
+			'entity'  => "{$post_type} {$arrow} {$title}",
+			'message' => $message,
+			'details' => [],
+		];
 	}
 
 	private function sync_post_meta( int $post_id, array $item ): void {
