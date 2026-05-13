@@ -6,16 +6,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Plugin_Adapter {
 
+	private array $execution_results = [];
+
 	public function register( array $blueprint ): void {
 		// Plugins are handled only during apply/validate.
 	}
 
 	public function apply( array $blueprint ): void {
+		$this->execution_results = [];
+
 		foreach ( $blueprint['plugins'] ?? [] as $plugin_config ) {
 			$plugin = $this->normalize_plugin_config( $plugin_config );
 
 			if ( empty( $plugin['slug'] ) ) {
 				$this->warn( 'Plugin slug is missing.' );
+				$this->execution_results[] = $this->execution_item(
+					'error',
+					'create',
+					'',
+					'Plugin slug is missing.'
+				);
 				continue;
 			}
 
@@ -25,14 +35,34 @@ class Factory_Plugin_Adapter {
 
 			if ( $this->is_active( $slug ) ) {
 				$this->log( "Plugin already active: {$slug}" );
+				$this->execution_results[] = $this->execution_item(
+					'ok',
+					'skip',
+					$slug,
+					"Plugin already active: {$slug}"
+				);
 				continue;
 			}
 
 			if ( $this->exists( $slug ) ) {
 				$this->log( "Plugin already installed: {$slug}" );
+				$this->execution_results[] = $this->execution_item(
+					'ok',
+					'skip',
+					$slug,
+					"Plugin already installed: {$slug}"
+				);
 
 				if ( $activate ) {
 					$this->activate( $slug );
+					$this->execution_results[] = $this->execution_item(
+						$this->is_active( $slug ) ? 'ok' : 'error',
+						'update',
+						$slug,
+						$this->is_active( $slug )
+							? "Plugin activated: {$slug}"
+							: "Plugin activation failed: {$slug}"
+					);
 				}
 
 				continue;
@@ -40,9 +70,25 @@ class Factory_Plugin_Adapter {
 
 			if ( $path && file_exists( $path ) ) {
 				$this->install_from_path( $slug, $path );
+				$this->execution_results[] = $this->execution_item(
+					$this->exists( $slug ) ? 'ok' : 'error',
+					'create',
+					$slug,
+					$this->exists( $slug )
+						? "Plugin installed: {$slug}"
+						: "Plugin install failed: {$slug}"
+				);
 
 				if ( $activate ) {
 					$this->activate( $slug );
+					$this->execution_results[] = $this->execution_item(
+						$this->is_active( $slug ) ? 'ok' : 'error',
+						'update',
+						$slug,
+						$this->is_active( $slug )
+							? "Plugin activated: {$slug}"
+							: "Plugin activation failed: {$slug}"
+					);
 				}
 
 				continue;
@@ -52,16 +98,42 @@ class Factory_Plugin_Adapter {
 
 			if ( file_exists( $fallback_zip ) ) {
 				$this->install_from_path( $slug, $fallback_zip );
+				$this->execution_results[] = $this->execution_item(
+					$this->exists( $slug ) ? 'ok' : 'error',
+					'create',
+					$slug,
+					$this->exists( $slug )
+						? "Plugin installed: {$slug}"
+						: "Plugin install failed: {$slug}"
+				);
 
 				if ( $activate ) {
 					$this->activate( $slug );
+					$this->execution_results[] = $this->execution_item(
+						$this->is_active( $slug ) ? 'ok' : 'error',
+						'update',
+						$slug,
+						$this->is_active( $slug )
+							? "Plugin activated: {$slug}"
+							: "Plugin activation failed: {$slug}"
+					);
 				}
 
 				continue;
 			}
 
 			$this->warn( "Plugin not found: {$slug}" );
+			$this->execution_results[] = $this->execution_item(
+				'error',
+				'create',
+				$slug,
+				"Plugin not found: {$slug}"
+			);
 		}
+	}
+
+	public function get_execution_results(): array {
+		return $this->execution_results;
 	}
 
 	public function plan( array $blueprint ): array {
@@ -260,6 +332,22 @@ class Factory_Plugin_Adapter {
 			'plugin activate ' . escapeshellarg( $slug ),
 			[ 'launch' => false ]
 		);
+	}
+
+	private function execution_item(
+		string $status,
+		string $action,
+		string $slug,
+		string $message
+	): array {
+		return [
+			'status'  => $status,
+			'action'  => $action,
+			'type'    => 'plugin',
+			'entity'  => $slug,
+			'message' => $message,
+			'details' => [],
+		];
 	}
 
 	private function log( string $message ): void {
