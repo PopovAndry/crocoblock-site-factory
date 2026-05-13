@@ -6,11 +6,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Theme_Adapter {
 
+	private array $execution_results = [];
+
 	public function register( array $blueprint ): void {
 		// нічого
 	}
 
 	public function apply( array $blueprint ): void {
+		$this->execution_results = [];
 
 		if ( empty( $blueprint['theme'] ) ) {
 			return;
@@ -22,11 +25,23 @@ class Factory_Theme_Adapter {
 		$path = $config['path'] ?? '';
 
 		if ( ! $slug ) {
+			$this->execution_results[] = $this->execution_item(
+				'error',
+				'create',
+				'',
+				'Theme slug is missing.'
+			);
 			return;
 		}
 
 		if ( wp_get_theme()->get_stylesheet() === $slug ) {
 			$this->log( "Theme already active: {$slug}" );
+			$this->execution_results[] = $this->execution_item(
+				'ok',
+				'skip',
+				$slug,
+				"Theme already active: {$slug}"
+			);
 			return;
 		}
 
@@ -39,10 +54,32 @@ class Factory_Theme_Adapter {
 					'theme install ' . escapeshellarg( $path ),
 					[ 'launch' => false ]
 				);
+
+				$this->execution_results[] = $this->execution_item(
+					wp_get_theme( $slug )->exists() ? 'ok' : 'error',
+					'create',
+					$slug,
+					wp_get_theme( $slug )->exists()
+						? "Theme installed: {$slug}"
+						: "Theme install failed: {$slug}"
+				);
 			} else {
 				$this->warn( "Theme not found: {$slug}" );
+				$this->execution_results[] = $this->execution_item(
+					'error',
+					'create',
+					$slug,
+					"Theme not found: {$slug}"
+				);
 				return;
 			}
+		} else {
+			$this->execution_results[] = $this->execution_item(
+				'ok',
+				'skip',
+				$slug,
+				"Theme already installed: {$slug}"
+			);
 		}
 
 		$this->log( "Activating theme: {$slug}" );
@@ -51,6 +88,19 @@ class Factory_Theme_Adapter {
 			'theme activate ' . escapeshellarg( $slug ),
 			[ 'launch' => false ]
 		);
+
+		$this->execution_results[] = $this->execution_item(
+			wp_get_theme()->get_stylesheet() === $slug ? 'ok' : 'error',
+			'update',
+			$slug,
+			wp_get_theme()->get_stylesheet() === $slug
+				? "Theme activated: {$slug}"
+				: "Theme activation failed: {$slug}"
+		);
+	}
+
+	public function get_execution_results(): array {
+		return $this->execution_results;
 	}
 
 	public function plan( array $blueprint ): array {
@@ -173,5 +223,21 @@ class Factory_Theme_Adapter {
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			WP_CLI::warning( $msg );
 		}
+	}
+
+	private function execution_item(
+		string $status,
+		string $action,
+		string $slug,
+		string $message
+	): array {
+		return [
+			'status'  => $status,
+			'action'  => $action,
+			'type'    => 'theme',
+			'entity'  => $slug,
+			'message' => $message,
+			'details' => [],
+		];
 	}
 }
