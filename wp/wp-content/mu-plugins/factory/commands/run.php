@@ -114,6 +114,41 @@ class Factory_Run_Command {
 
 		WP_CLI::log( '' );
 
+		$execution_items = $data['execution']['items'] ?? [];
+
+		if ( ! is_array( $execution_items ) ) {
+			$execution_items = [];
+		}
+
+		WP_CLI::log( 'Execution' );
+		WP_CLI::log(
+			'Items: ' .
+			count( $execution_items )
+		);
+
+		foreach ( $execution_items as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+
+			$status  = $item['status'] ?? '';
+			$action  = $item['action'] ?? '';
+			$type    = $item['type'] ?? '';
+			$entity  = $item['entity'] ?? '';
+			$message = $item['message'] ?? '';
+
+			$icon = $this->execution_icon(
+				$status,
+				$action
+			);
+
+			WP_CLI::log(
+				"{$icon} {$action} {$type} {$entity} - {$message}"
+			);
+		}
+
+		WP_CLI::log( '' );
+
 		$checks = $data['validation']['checks'] ?? [];
 
 		WP_CLI::log(
@@ -139,5 +174,22 @@ class Factory_Run_Command {
 				"{$icon} {$message}"
 			);
 		}
+	}
+
+	private function execution_icon(
+		string $status,
+		string $action
+	): string {
+		if ( 'error' === $status ) {
+			return 'x';
+		}
+
+		return match ( $action ) {
+			'create'  => '+',
+			'update'  => '~',
+			'skip'    => '=',
+			'warning' => '!',
+			default   => '-',
+		};
 	}
 }
