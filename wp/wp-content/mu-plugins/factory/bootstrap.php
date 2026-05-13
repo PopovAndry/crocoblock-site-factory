@@ -73,7 +73,9 @@ add_action( 'init', function () {
 	}
 } );
 
-function factory_apply_blueprint( array $blueprint ): void {
+function factory_apply_blueprint( array $blueprint ): array {
+	$execution = [];
+
 	update_option( FACTORY_BLUEPRINT_OPTION, $blueprint );
 
 	$permalink = $blueprint['site']['permalink'] ?? '/%postname%/';
@@ -81,9 +83,16 @@ function factory_apply_blueprint( array $blueprint ): void {
 
 	foreach ( factory_get_adapters() as $adapter ) {
 		$adapter->apply( $blueprint );
+
+		if ( method_exists( $adapter, 'get_execution_results' ) ) {
+			$adapter_results = $adapter->get_execution_results();
+			$execution = array_merge( $execution, $adapter_results );
+		}
 	}
 
 	flush_rewrite_rules();
+
+	return $execution;
 }
 
 function factory_validate_blueprint_state( array $blueprint, bool $cli_output = true ): array {
