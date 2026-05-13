@@ -286,11 +286,13 @@ public function plan( array $blueprint ): array {
 		string $title,
 		string $message
 	): array {
+		$arrow = html_entity_decode( '&#8594;', ENT_QUOTES, 'UTF-8' );
+
 		return [
 			'status'  => $status,
 			'action'  => $action,
 			'type'    => 'content',
-			'entity'  => "{$post_type} в†’ {$title}",
+			'entity'  => "{$post_type} {$arrow} {$title}",
 			'message' => $message,
 			'details' => [],
 		];
