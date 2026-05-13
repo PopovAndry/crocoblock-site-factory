@@ -165,6 +165,7 @@ class Factory_Dry_Run_Command {
 
 		if ( $is_json ) {
 			$data = [
+				'version' => 1,
 				'summary' => $summary,
 				'items'   => $all_items,
 			];
