@@ -6,12 +6,30 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Single_Adapter {
 
+	private array $execution_results = [];
+
 	public function register( array $blueprint ): void {
 		add_filter( 'template_include', [ $this, 'override_single_template' ], 99 );
 	}
 
 	public function apply( array $blueprint ): void {
-		// Runtime rendering only.
+		$this->execution_results = [];
+
+		foreach ( $blueprint['single'] ?? [] as $post_type => $config ) {
+			$exists = post_type_exists( $post_type );
+
+			$this->execution_results[] = $this->execution_item(
+				$exists ? 'ok' : 'error',
+				$post_type,
+				$exists
+					? "Single template registered for: {$post_type}"
+					: "Single template post type missing: {$post_type}"
+			);
+		}
+	}
+
+	public function get_execution_results(): array {
+		return $this->execution_results;
 	}
 
 	public function plan( array $blueprint ): array {
@@ -47,6 +65,21 @@ class Factory_Single_Adapter {
 		}
 
 		return $checks;
+	}
+
+	private function execution_item(
+		string $status,
+		string $entity,
+		string $message
+	): array {
+		return [
+			'status'  => $status,
+			'action'  => 'skip',
+			'type'    => 'single',
+			'entity'  => $entity,
+			'message' => $message,
+			'details' => [],
+		];
 	}
 
 	public function override_single_template( string $template ): string {
