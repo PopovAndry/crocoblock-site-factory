@@ -8,13 +8,33 @@ class Factory_JetEngine_Adapter {
 
 	private string $option_name = 'jet_engine_meta_boxes';
 
+	private array $execution_results = [];
+
 	public function register( array $blueprint ): void {
 		// Runtime registration not needed here.
 	}
 
 	public function apply( array $blueprint ): void {
+		$this->execution_results = [];
+
 		if ( ! function_exists( 'jet_engine' ) ) {
 			$this->log( 'JetEngine not active. Skipping.' );
+
+			foreach ( $blueprint['cpt'] ?? [] as $cpt ) {
+				if ( empty( $cpt['slug'] ) ) {
+					continue;
+				}
+
+				$box_id = $this->get_box_id( $cpt['slug'] );
+
+				$this->execution_results[] = $this->execution_item(
+					'error',
+					'create',
+					$box_id,
+					"JetEngine not active. Meta box sync skipped: {$box_id}"
+				);
+			}
+
 			return;
 		}
 
@@ -31,12 +51,21 @@ class Factory_JetEngine_Adapter {
 				continue;
 			}
 
-			$boxes = $this->upsert_meta_box( $boxes, $cpt );
+			$result = null;
+			$boxes  = $this->upsert_meta_box( $boxes, $cpt, $result );
+
+			if ( is_array( $result ) ) {
+				$this->execution_results[] = $result;
+			}
 		}
 
 		update_option( $this->option_name, $boxes );
 
 		$this->log( 'JetEngine meta boxes synced.' );
+	}
+
+	public function get_execution_results(): array {
+		return $this->execution_results;
 	}
 
 	public function plan( array $blueprint ): array {
@@ -196,7 +225,11 @@ class Factory_JetEngine_Adapter {
 		return $checks;
 	}
 
-	private function upsert_meta_box( array $boxes, array $cpt ): array {
+	private function upsert_meta_box(
+		array $boxes,
+		array $cpt,
+		?array &$execution_result = null
+	): array {
 		$post_type = $cpt['slug'];
 		$box_id    = $this->get_box_id( $post_type );
 
@@ -251,6 +284,8 @@ class Factory_JetEngine_Adapter {
 		}
 
 		if ( empty( $current_state ) || ! empty( $diff ) ) {
+			$action = empty( $current_state ) ? 'create' : 'update';
+
 			if ( ! empty( $diff ) ) {
 				$this->log( "JetEngine meta box diff detected: {$box_id}" );
 			}
@@ -268,12 +303,44 @@ class Factory_JetEngine_Adapter {
 
 			$boxes[] = $new_box;
 
+			$execution_result = $this->execution_item(
+				'ok',
+				$action,
+				$box_id,
+				'create' === $action
+					? "JetEngine meta box created: {$box_id}"
+					: "JetEngine meta box updated: {$box_id}"
+			);
+
 			return $boxes;
 		}
 
 		$this->log( "JetEngine meta box up-to-date: {$box_id}" );
 
+		$execution_result = $this->execution_item(
+			'ok',
+			'skip',
+			$box_id,
+			"JetEngine meta box up-to-date: {$box_id}"
+		);
+
 		return $boxes;
+	}
+
+	private function execution_item(
+		string $status,
+		string $action,
+		string $entity,
+		string $message
+	): array {
+		return [
+			'status'  => $status,
+			'action'  => $action,
+			'type'    => 'jetengine',
+			'entity'  => $entity,
+			'message' => $message,
+			'details' => [],
+		];
 	}
 
 	private function get_current_meta_box_state( array $boxes, string $box_id ): array {
