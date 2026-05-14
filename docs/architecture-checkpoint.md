@@ -2,7 +2,7 @@
 
 ## Поточний checkpoint
 
-- Main commit: `23f4a0c`
+- Code checkpoint commit: `23f4a0c`
 - Working tree: clean
 - Execution coverage: complete for current MVP blueprint
 
