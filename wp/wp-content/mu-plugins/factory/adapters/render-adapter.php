@@ -6,14 +6,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_Render_Adapter {
 
+	private array $execution_results = [];
+
 	public function register( array $blueprint ): void {
 		add_shortcode( 'factory_listing', [ $this, 'render_listing_shortcode' ] );
 	}
 
 	public function apply( array $blueprint ): void {
+		$this->execution_results = [];
+
 		foreach ( $blueprint['listings'] ?? [] as $listing ) {
-			$this->upsert_listing_page( $listing );
+			$result = $this->upsert_listing_page( $listing );
+
+			if ( is_array( $result ) ) {
+				$this->execution_results[] = $result;
+			}
 		}
+	}
+
+	public function get_execution_results(): array {
+		return $this->execution_results;
 	}
 
 	public function plan( array $blueprint ): array {
@@ -146,12 +158,12 @@ class Factory_Render_Adapter {
 		return $results;
 	}
 
-	private function upsert_listing_page( array $listing ): void {
+	private function upsert_listing_page( array $listing ): ?array {
 		$slug      = $listing['slug'] ?? '';
 		$post_type = $listing['post_type'] ?? '';
 
 		if ( ! $slug || ! $post_type ) {
-			return;
+			return null;
 		}
 
 		$page_config = $this->get_archive_page_config( $post_type );
@@ -186,20 +198,39 @@ class Factory_Render_Adapter {
 			if ( empty( $diff ) ) {
 				$this->log( "Render page up-to-date: {$page_slug}" );
 
-				return;
+				return $this->execution_item(
+					'ok',
+					'skip',
+					$page_slug,
+					"Render page up-to-date: {$page_slug}"
+				);
 			}
 
 			$post_data              = $target_state;
 			$post_data['ID']        = $existing->ID;
 			$post_data['post_type'] = 'page';
 
-			wp_update_post( $post_data );
+			$post_id = wp_update_post( $post_data );
 			$this->log( "Render page updated: {$page_slug}" );
 
-			return;
+			if ( is_wp_error( $post_id ) || ! $post_id ) {
+				return $this->execution_item(
+					'error',
+					'update',
+					$page_slug,
+					"Render page update failed: {$page_slug}"
+				);
+			}
+
+			return $this->execution_item(
+				'ok',
+				'update',
+				$page_slug,
+				"Render page updated: {$page_slug}"
+			);
 		}
 
-		wp_insert_post( [
+		$post_id = wp_insert_post( [
 			'post_type'    => 'page',
 			'post_title'   => $page_title,
 			'post_name'    => $page_slug,
@@ -208,6 +239,38 @@ class Factory_Render_Adapter {
 		] );
 
 		$this->log( "Render page created: {$page_slug}" );
+
+		if ( is_wp_error( $post_id ) || ! $post_id ) {
+			return $this->execution_item(
+				'error',
+				'create',
+				$page_slug,
+				"Render page create failed: {$page_slug}"
+			);
+		}
+
+		return $this->execution_item(
+			'ok',
+			'create',
+			$page_slug,
+			"Render page created: {$page_slug}"
+		);
+	}
+
+	private function execution_item(
+		string $status,
+		string $action,
+		string $entity,
+		string $message
+	): array {
+		return [
+			'status'  => $status,
+			'action'  => $action,
+			'type'    => 'render',
+			'entity'  => $entity,
+			'message' => $message,
+			'details' => [],
+		];
 	}
 
 	public function render_listing_shortcode( array $atts ): string {
