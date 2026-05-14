@@ -10,8 +10,6 @@ class Factory_Run_Command {
 
 		$file = $args[0] ?? 'latest';
 
-		$file = $args[0] ?? 'latest';
-
 		if ( 'latest' === $file ) {
 			$file = factory_get_latest_run_name();
 
@@ -142,14 +140,29 @@ class Factory_Run_Command {
 				$action
 			);
 
-			WP_CLI::log(
-				"{$icon} {$action} {$type} {$entity} - {$message}"
+			$line_parts = array_filter(
+				[ $action, $type, $entity ],
+				static fn( $part ) => '' !== trim( (string) $part )
 			);
+
+			$line = trim(
+				$icon . ' ' . implode( ' ', $line_parts )
+			);
+
+			if ( '' !== trim( (string) $message ) ) {
+				$line .= ' - ' . $message;
+			}
+
+			WP_CLI::log( $line );
 		}
 
 		WP_CLI::log( '' );
 
 		$checks = $data['validation']['checks'] ?? [];
+
+		if ( ! is_array( $checks ) ) {
+			$checks = [];
+		}
 
 		WP_CLI::log(
 			'Validation checks: ' .
@@ -164,7 +177,7 @@ class Factory_Run_Command {
 			$message = $check['message'] ?? '';
 
 			$icon = match ( $status ) {
-				'ok'      => '✓',
+				'ok'      => '=',
 				'warning' => '!',
 				'error'   => 'x',
 				default   => '-',
