@@ -6,6 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_WP_Core_Adapter {
 
+	private array $execution_results = [];
+
 	public function register( array $blueprint ): void {
 		foreach ( $blueprint['cpt'] ?? [] as $cpt ) {
 			$this->register_cpt( $cpt );
@@ -14,7 +16,51 @@ class Factory_WP_Core_Adapter {
 	}
 
 	public function apply( array $blueprint ): void {
-		$this->register( $blueprint );
+		$this->execution_results = [];
+
+		foreach ( $blueprint['cpt'] ?? [] as $cpt ) {
+			if ( empty( $cpt['slug'] ) ) {
+				$this->execution_results[] = $this->execution_item(
+					'error',
+					'create',
+					'cpt',
+					'unknown',
+					'CPT slug is missing.'
+				);
+				continue;
+			}
+
+			$this->execution_results[] = $this->execute_cpt_registration( $cpt );
+			$this->register_meta_fields( $cpt );
+
+			foreach ( $cpt['meta'] ?? [] as $meta ) {
+				$key  = $meta['key'] ?? '';
+				$slug = $cpt['slug'];
+
+				if ( ! $key ) {
+					$this->execution_results[] = $this->execution_item(
+						'warning',
+						'skip',
+						'meta',
+						$slug,
+						"Meta key missing for CPT: {$slug}"
+					);
+					continue;
+				}
+
+				$this->execution_results[] = $this->execution_item(
+					'ok',
+					'skip',
+					'meta',
+					"{$slug}.{$key}",
+					"Meta declared: {$slug}.{$key}"
+				);
+			}
+		}
+	}
+
+	public function get_execution_results(): array {
+		return $this->execution_results;
 	}
 
 	public function plan( array $blueprint ): array {
@@ -136,6 +182,83 @@ class Factory_WP_Core_Adapter {
 			'slug'     => $slug,
 			'label'    => $object->label ?? '',
 			'supports' => get_all_post_type_supports( $slug ),
+		];
+	}
+
+	private function get_target_cpt_state( array $cpt ): array {
+		$slug = $cpt['slug'];
+
+		return [
+			'slug'     => $slug,
+			'label'    => $cpt['label'] ?? ucfirst( $slug ),
+			'supports' => array_fill_keys( $cpt['supports'] ?? [ 'title', 'editor' ], true ),
+		];
+	}
+
+	private function execute_cpt_registration( array $cpt ): array {
+		$slug    = $cpt['slug'];
+		$current = $this->get_current_cpt_state( $slug );
+		$target  = $this->get_target_cpt_state( $cpt );
+		$diff    = factory_diff_arrays( $current, $target );
+		$action  = empty( $current )
+			? 'create'
+			: ( empty( $diff ) ? 'skip' : 'update' );
+
+		$this->register_cpt( $cpt );
+
+		if ( ! post_type_exists( $slug ) ) {
+			return $this->execution_item(
+				'error',
+				$action,
+				'cpt',
+				$slug,
+				"CPT registration failed: {$slug}"
+			);
+		}
+
+		if ( 'create' === $action ) {
+			return $this->execution_item(
+				'ok',
+				'create',
+				'cpt',
+				$slug,
+				"CPT registered: {$slug}"
+			);
+		}
+
+		if ( 'update' === $action ) {
+			return $this->execution_item(
+				'ok',
+				'update',
+				'cpt',
+				$slug,
+				"CPT updated: {$slug}"
+			);
+		}
+
+		return $this->execution_item(
+			'ok',
+			'skip',
+			'cpt',
+			$slug,
+			"CPT up-to-date: {$slug}"
+		);
+	}
+
+	private function execution_item(
+		string $status,
+		string $action,
+		string $type,
+		string $entity,
+		string $message
+	): array {
+		return [
+			'status'  => $status,
+			'action'  => $action,
+			'type'    => $type,
+			'entity'  => $entity,
+			'message' => $message,
+			'details' => [],
 		];
 	}
 
