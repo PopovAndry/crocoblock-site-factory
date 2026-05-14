@@ -274,13 +274,53 @@ function factory_log_diff_report(): void {
 
 		factory_reset_diff_report();
 
-		factory_apply_blueprint( $blueprint );
+		$execution = factory_apply_blueprint( $blueprint );
 
 		global $factory_diff_report;
 
 		if ( isset( $factory_diff_report ) ) {
 			$factory_diff_report->output();
 		}
+
+		$dry_run    = new Factory_Dry_Run_Command();
+		$plan_items = $dry_run->get_plan_items( $blueprint );
+		$summary    = [
+			'create'  => 0,
+			'update'  => 0,
+			'skip'    => 0,
+			'warning' => 0,
+			'error'   => 0,
+		];
+
+		foreach ( $plan_items as $item ) {
+			$action = $item['action'] ?? 'skip';
+
+			if ( isset( $summary[ $action ] ) ) {
+				$summary[ $action ]++;
+			}
+		}
+
+		$plan = [
+			'version' => 1,
+			'summary' => $summary,
+			'items'   => $plan_items,
+		];
+
+		$report = factory_validate_blueprint_state( $blueprint, true );
+
+		$manifest_path = factory_save_run_manifest(
+			"Manual apply: {$path}",
+			null,
+			$blueprint,
+			$plan,
+			$report,
+			$report['status'] ?? 'error',
+			$execution
+		);
+
+		WP_CLI::success(
+			"Run manifest saved: {$manifest_path}"
+		);
 
 		WP_CLI::success( "Factory blueprint applied: {$path}" );
 	} );
