@@ -468,6 +468,64 @@ function factory_rest_doctor(): WP_REST_Response {
             );
         }
 
+        $run['file'] = $latest;
+
+        if ( ! isset( $run['plan'] ) || ! is_array( $run['plan'] ) ) {
+            $run['plan'] = [];
+        }
+
+        if ( ! isset( $run['plan']['version'] ) || null === $run['plan']['version'] ) {
+            $run['plan']['version'] = 1;
+        }
+
+        if ( ! isset( $run['plan']['summary'] ) || ! is_array( $run['plan']['summary'] ) ) {
+            $run['plan']['summary'] = [];
+        }
+
+        if ( ! isset( $run['execution'] ) || ! is_array( $run['execution'] ) ) {
+            $run['execution'] = [];
+        }
+
+        if ( ! isset( $run['execution']['version'] ) || null === $run['execution']['version'] ) {
+            $run['execution']['version'] = 1;
+        }
+
+        if ( ! isset( $run['execution']['items'] ) || ! is_array( $run['execution']['items'] ) ) {
+            $run['execution']['items'] = [];
+        }
+
+        $run['execution']['count'] = count( $run['execution']['items'] );
+
+        if ( ! isset( $run['results'] ) || ! is_array( $run['results'] ) ) {
+            $run['results'] = [];
+        }
+
+        if ( ! isset( $run['results']['version'] ) || null === $run['results']['version'] ) {
+            $run['results']['version'] = 1;
+        }
+
+        if ( ! isset( $run['results']['source'] ) || null === $run['results']['source'] ) {
+            $run['results']['source'] = '';
+        }
+
+        if ( ! isset( $run['results']['summary'] ) || ! is_array( $run['results']['summary'] ) ) {
+            $run['results']['summary'] = [];
+        }
+
+        if ( ! isset( $run['validation'] ) || ! is_array( $run['validation'] ) ) {
+            $run['validation'] = [];
+        }
+
+        if ( ! isset( $run['validation']['status'] ) || null === $run['validation']['status'] ) {
+            $run['validation']['status'] = '';
+        }
+
+        if ( ! isset( $run['validation']['checks'] ) || ! is_array( $run['validation']['checks'] ) ) {
+            $run['validation']['checks'] = [];
+        }
+
+        $run['validation']['count'] = count( $run['validation']['checks'] );
+
         return new WP_REST_Response(
             [
                 'status' => 'ok',
