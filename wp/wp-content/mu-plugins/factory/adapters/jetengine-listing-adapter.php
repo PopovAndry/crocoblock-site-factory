@@ -6,19 +6,43 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Factory_JetEngine_Listing_Adapter {
 
+	private array $execution_results = [];
+
 	public function register( array $blueprint ): void {
 		// Listings are created on apply only.
 	}
 
 	public function apply( array $blueprint ): void {
+		$this->execution_results = [];
+
 		if ( ! function_exists( 'jet_engine' ) ) {
 			$this->log( 'JetEngine not active. Listing sync skipped.' );
+
+			foreach ( $blueprint['listings'] ?? [] as $listing ) {
+				$title = $listing['title'] ?? ( $listing['slug'] ?? 'JetEngine' );
+
+				$this->execution_results[] = $this->execution_item(
+					'error',
+					'skip',
+					$title,
+					'JetEngine not active. Listing sync skipped.'
+				);
+			}
+
 			return;
 		}
 
 		foreach ( $blueprint['listings'] ?? [] as $listing ) {
-			$this->upsert_listing( $listing );
+			$result = $this->upsert_listing( $listing );
+
+			if ( is_array( $result ) ) {
+				$this->execution_results[] = $result;
+			}
 		}
+	}
+
+	public function get_execution_results(): array {
+		return $this->execution_results;
 	}
 
 	public function plan( array $blueprint ): array {
@@ -134,14 +158,20 @@ public function validate( array $blueprint ): array {
 	return $results;
 }
 
-	private function upsert_listing( array $listing ): void {
+	private function upsert_listing( array $listing ): ?array {
 		$slug      = $listing['slug'] ?? '';
 		$title     = $listing['title'] ?? $slug;
 		$post_type = $listing['post_type'] ?? '';
 
 		if ( ! $slug || ! $post_type ) {
 			$this->warn( 'Listing slug or post_type is missing.' );
-			return;
+
+			return $this->execution_item(
+				'error',
+				'create',
+				$title ?: 'unknown',
+				'Listing slug or post_type is missing.'
+			);
 		}
 
 		$content  = $this->generate_blocks( $listing );
@@ -155,7 +185,13 @@ public function validate( array $blueprint ): array {
 
 			if ( empty( $diff ) ) {
 				$this->log( "Listing up-to-date: {$title}" );
-				return;
+
+				return $this->execution_item(
+					'ok',
+					'skip',
+					$title,
+					"Listing up-to-date: {$title}"
+				);
 			}
 
 			$post_id = wp_update_post( [
@@ -169,13 +205,24 @@ public function validate( array $blueprint ): array {
 
 			if ( is_wp_error( $post_id ) ) {
 				$this->warn( $post_id->get_error_message() );
-				return;
+
+				return $this->execution_item(
+					'error',
+					'update',
+					$title,
+					"Listing update failed: {$title}"
+				);
 			}
 
 			$this->sync_listing_meta( (int) $post_id, $listing );
 			$this->log( "Listing updated: {$title}" );
 
-			return;
+			return $this->execution_item(
+				'ok',
+				'update',
+				$title,
+				"Listing updated: {$title}"
+			);
 		}
 
 		$post_id = wp_insert_post( [
@@ -188,11 +235,40 @@ public function validate( array $blueprint ): array {
 
 		if ( is_wp_error( $post_id ) ) {
 			$this->warn( $post_id->get_error_message() );
-			return;
+
+			return $this->execution_item(
+				'error',
+				'create',
+				$title,
+				"Listing create failed: {$title}"
+			);
 		}
 
 		$this->sync_listing_meta( (int) $post_id, $listing );
 		$this->log( "Listing created: {$title}" );
+
+		return $this->execution_item(
+			'ok',
+			'create',
+			$title,
+			"Listing created: {$title}"
+		);
+	}
+
+	private function execution_item(
+		string $status,
+		string $action,
+		string $entity,
+		string $message
+	): array {
+		return [
+			'status'  => $status,
+			'action'  => $action,
+			'type'    => 'listing',
+			'entity'  => $entity,
+			'message' => $message,
+			'details' => [],
+		];
 	}
 
 	private function sync_listing_meta( int $post_id, array $listing ): void {
