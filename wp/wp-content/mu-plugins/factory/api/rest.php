@@ -58,6 +58,15 @@ add_action(
         );
         register_rest_route(
             'factory/v1',
+            '/run/(?P<file>run-[^/]+\.json)',
+            [
+                'methods'             => 'GET',
+                'callback'            => 'factory_rest_run',
+                'permission_callback' => '__return_true',
+            ]
+        );
+        register_rest_route(
+            'factory/v1',
             '/explain/latest',
             [
                 'methods'             => 'GET',
@@ -221,6 +230,7 @@ add_action(
                 '/doctor',
                 '/runs',
                 '/run/latest',
+                '/run/{file}',
                 '/explain/latest',
                 '/index',
                 '/capabilities',
@@ -468,7 +478,70 @@ function factory_rest_doctor(): WP_REST_Response {
             );
         }
 
-        $run['file'] = $latest;
+        return new WP_REST_Response(
+            [
+                'status' => 'ok',
+                'run'    => factory_rest_enrich_run_manifest( $run, $latest ),
+            ]
+        );
+    }
+
+    function factory_rest_run( WP_REST_Request $request ): WP_REST_Response {
+
+        $file = (string) $request->get_param( 'file' );
+
+        if ( ! factory_rest_is_safe_run_file( $file ) ) {
+            return new WP_REST_Response(
+                [
+                    'status'  => 'error',
+                    'message' => 'Invalid run file.',
+                ],
+                400
+            );
+        }
+
+        $run = factory_get_run_manifest( $file );
+
+        if ( ! is_array( $run ) ) {
+            return new WP_REST_Response(
+                [
+                    'status'  => 'error',
+                    'message' => 'Run file not found or invalid.',
+                ],
+                404
+            );
+        }
+
+        return new WP_REST_Response(
+            [
+                'status' => 'ok',
+                'run'    => factory_rest_enrich_run_manifest( $run, $file ),
+            ]
+        );
+    }
+
+    function factory_rest_is_safe_run_file( string $file ): bool {
+        if ( '' === $file ) {
+            return false;
+        }
+
+        if (
+            str_contains( $file, '/' ) ||
+            str_contains( $file, '\\' ) ||
+            str_contains( $file, '..' )
+        ) {
+            return false;
+        }
+
+        if ( basename( $file ) !== $file ) {
+            return false;
+        }
+
+        return 1 === preg_match( '/^run-[A-Za-z0-9_.-]+\.json$/', $file );
+    }
+
+    function factory_rest_enrich_run_manifest( array $run, string $file ): array {
+        $run['file'] = $file;
 
         if ( ! isset( $run['plan'] ) || ! is_array( $run['plan'] ) ) {
             $run['plan'] = [];
@@ -480,6 +553,10 @@ function factory_rest_doctor(): WP_REST_Response {
 
         if ( ! isset( $run['plan']['summary'] ) || ! is_array( $run['plan']['summary'] ) ) {
             $run['plan']['summary'] = [];
+        }
+
+        if ( ! isset( $run['plan']['items'] ) || ! is_array( $run['plan']['items'] ) ) {
+            $run['plan']['items'] = [];
         }
 
         if ( ! isset( $run['execution'] ) || ! is_array( $run['execution'] ) ) {
@@ -512,6 +589,10 @@ function factory_rest_doctor(): WP_REST_Response {
             $run['results']['summary'] = [];
         }
 
+        if ( ! isset( $run['results']['items'] ) || ! is_array( $run['results']['items'] ) ) {
+            $run['results']['items'] = [];
+        }
+
         if ( ! isset( $run['validation'] ) || ! is_array( $run['validation'] ) ) {
             $run['validation'] = [];
         }
@@ -526,12 +607,7 @@ function factory_rest_doctor(): WP_REST_Response {
 
         $run['validation']['count'] = count( $run['validation']['checks'] );
 
-        return new WP_REST_Response(
-            [
-                'status' => 'ok',
-                'run'    => $run,
-            ]
-        );
+        return $run;
     }
 
 function factory_rest_runs( WP_REST_Request $request ): WP_REST_Response {
