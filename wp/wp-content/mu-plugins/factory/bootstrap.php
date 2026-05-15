@@ -43,6 +43,7 @@ require_once __DIR__ . '/commands/summary.php';
 require_once __DIR__ . '/commands/commands.php';
 require_once __DIR__ . '/commands/adapters.php';
 require_once __DIR__ . '/api/rest.php';
+require_once __DIR__ . '/admin/dashboard.php';
 
 function factory_get_blueprint(): array {
 	$blueprint = get_option( FACTORY_BLUEPRINT_OPTION );
