@@ -660,12 +660,28 @@ function factory_rest_runs( WP_REST_Request $request ): WP_REST_Response {
 	$rows = [];
 
 	foreach ( $runs as $run ) {
+		$plan_summary = $run['plan_summary'] ?? [];
+
+		if ( ! is_array( $plan_summary ) ) {
+			$plan_summary = [];
+		}
+
+		$results_summary = $run['results_summary'] ?? [];
+
+		if ( ! is_array( $results_summary ) ) {
+			$results_summary = [];
+		}
+
 		$rows[] = [
-			'file'      => $run['file'] ?? '',
-			'timestamp' => $run['timestamp'] ?? '',
-			'status'    => $run['status'] ?? '',
-			'preset'    => $run['preset'] ?? '',
-			'prompt'    => $run['prompt'] ?? '',
+			'file'             => $run['file'] ?? '',
+			'timestamp'        => $run['timestamp'] ?? '',
+			'status'           => $run['status'] ?? '',
+			'preset'           => $run['preset'] ?? '',
+			'prompt'           => $run['prompt'] ?? '',
+			'plan_summary'     => $plan_summary,
+			'execution_count'  => isset( $run['execution_count'] ) ? (int) $run['execution_count'] : 0,
+			'validation_count' => isset( $run['validation_count'] ) ? (int) $run['validation_count'] : 0,
+			'results_summary'  => $results_summary,
 		];
 	}
 

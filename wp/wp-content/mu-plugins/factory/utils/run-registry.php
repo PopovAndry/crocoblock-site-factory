@@ -35,12 +35,40 @@ function factory_update_run_registry( array $manifest ): void {
 		return;
 	}
 
+	$plan_summary = $manifest['plan']['summary'] ?? [];
+
+	if ( ! is_array( $plan_summary ) ) {
+		$plan_summary = [];
+	}
+
+	$execution_items = $manifest['execution']['items'] ?? [];
+
+	if ( ! is_array( $execution_items ) ) {
+		$execution_items = [];
+	}
+
+	$validation_checks = $manifest['validation']['checks'] ?? [];
+
+	if ( ! is_array( $validation_checks ) ) {
+		$validation_checks = [];
+	}
+
+	$results_summary = $manifest['results']['summary'] ?? [];
+
+	if ( ! is_array( $results_summary ) ) {
+		$results_summary = [];
+	}
+
 	$entry = [
-		'file'      => $file,
-		'timestamp' => $manifest['timestamp'] ?? '',
-		'status'    => $manifest['status'] ?? 'unknown',
-		'preset'    => $manifest['preset'] ?? null,
-		'prompt'    => $manifest['prompt'] ?? '',
+		'file'             => $file,
+		'timestamp'        => $manifest['timestamp'] ?? '',
+		'status'           => $manifest['status'] ?? 'unknown',
+		'preset'           => $manifest['preset'] ?? null,
+		'prompt'           => $manifest['prompt'] ?? '',
+		'plan_summary'     => $plan_summary,
+		'execution_count'  => count( $execution_items ),
+		'validation_count' => count( $validation_checks ),
+		'results_summary'  => $results_summary,
 	];
 
 	$registry['latest'] = $file;
