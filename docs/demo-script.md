@@ -147,7 +147,7 @@ Expected result:
 - `execution_count`: `16`;
 - `validation_count`: `28`;
 - `results_summary.ok`: `28`;
-- `blueprint`: absent / `True` for the null check.
+- `blueprint` is absent from `/runs`; the PowerShell null check returns `True`.
 
 ## Optional: Demonstrate Repair Flow
 

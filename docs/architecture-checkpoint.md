@@ -2,7 +2,7 @@
 
 ## Current Checkpoint
 
-- Current docs checkpoint: `004deba`
+- Code checkpoint: `004deba`
 - Original execution coverage checkpoint: `23f4a0c`
 - Working tree: clean
 - Execution coverage: complete for the current MVP blueprint
@@ -66,7 +66,9 @@ Status rules:
 - any validation error => `error`;
 - any warning without errors => `warning`;
 - all checks ok => `ok`;
-- missing, empty, or malformed validation is conservative (`error` or `warning`).
+- missing checks => `error`;
+- empty checks => `warning`;
+- malformed checks or unknown check status => `warning`.
 
 The run registry inherits status from the manifest. `/runs?failed=1` is therefore more accurate for newly written runs. Old manifests and old registry rows are not migrated.
 
@@ -242,8 +244,8 @@ Do not add these yet:
 
 ## Recommended Next Steps
 
-1. Final smoke test.
-2. Demo script.
-3. REST/control-plane polish only where UI needs it.
-4. Execution-aware fix polish later, only if real repair cases need richer reporting.
-5. AI quality layer later.
+1. REST/control-plane polish where UI needs it.
+2. Optional README integration.
+3. AI quality layer.
+4. Additional presets.
+5. Repair/fix polish only when real cases require it.
