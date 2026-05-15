@@ -79,6 +79,8 @@ class Factory_Fix_Command {
 				: 'Applying affected adapters with dependencies...'
 		);
 
+		$execution = [];
+
 		foreach ( $adapters as $adapter ) {
 			$class = get_class( $adapter );
 
@@ -115,6 +117,10 @@ class Factory_Fix_Command {
 
 			WP_CLI::log( "Fixing via {$class}..." );
 			$adapter->apply( $blueprint );
+
+			if ( method_exists( $adapter, 'get_execution_results' ) ) {
+				$execution = array_merge( $execution, $adapter->get_execution_results() );
+			}
 		}
 
 		if ( $is_dry_run ) {
@@ -129,6 +135,25 @@ class Factory_Fix_Command {
 		$remaining_changes = [];
 
 		$plan_items_after_fix = $dry_run->get_plan_items( $blueprint );
+		$plan_summary         = $this->build_plan_summary( $plan_items_after_fix );
+		$plan                 = [
+			'version' => 1,
+			'summary' => $plan_summary,
+			'items'   => $plan_items_after_fix,
+		];
+
+		$report        = factory_validate_blueprint_state( $blueprint, true );
+		$manifest_path = factory_save_run_manifest(
+			'Fix active blueprint',
+			null,
+			$blueprint,
+			$plan,
+			$report,
+			$report['status'] ?? 'error',
+			$execution
+		);
+
+		WP_CLI::log( "Run manifest saved: {$manifest_path}" );
 
 		foreach ( $plan_items_after_fix as $item ) {
 			if ( in_array( $item['action'] ?? '', [ 'create', 'update', 'error' ], true ) ) {
@@ -172,5 +197,27 @@ class Factory_Fix_Command {
 			WP_CLI::log( "- {$adapter}" );
 			WP_CLI::log( "  {$message}" );
 		}
+	}
+
+	private function build_plan_summary( array $plan_items ): array {
+		$summary = [
+			'create'  => 0,
+			'update'  => 0,
+			'skip'    => 0,
+			'warning' => 0,
+			'error'   => 0,
+		];
+
+		foreach ( $plan_items as $item ) {
+			$action = $item['action'] ?? 'skip';
+
+			if ( ! array_key_exists( $action, $summary ) ) {
+				$action = 'skip';
+			}
+
+			$summary[ $action ]++;
+		}
+
+		return $summary;
 	}
 }
