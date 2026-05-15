@@ -2,11 +2,13 @@
 
 ## Current Checkpoint
 
-- Current docs checkpoint: `b6ebd84`
+- Current docs checkpoint: `004deba`
 - Original execution coverage checkpoint: `23f4a0c`
 - Working tree: clean
 - Execution coverage: complete for the current MVP blueprint
 - Execution-aware fix v1: implemented and verified
+- Failed-run/status alignment v1: implemented
+- REST `/runs` lightweight summary enrichment v1: implemented
 
 ## What It Is
 
@@ -54,6 +56,19 @@ The fix manifest includes:
 - visibility through `wp factory latest` and REST `/run/latest`.
 
 Verified scenario: the generated `Backend Developer` job post was deleted, `doctor` detected drift, `dry-run` showed a content item create action, `fix` restored the post through `Factory_Content_Adapter`, the latest run had `execution.count = 2`, the post-fix plan was `0 create / 0 update / 16 skip`, validation had `28 checks`, and `doctor` was green afterward.
+
+## Run Status Alignment
+
+New run manifests derive top-level `status` from validation checks. The manifest writer no longer trusts caller-provided status.
+
+Status rules:
+
+- any validation error => `error`;
+- any warning without errors => `warning`;
+- all checks ok => `ok`;
+- missing, empty, or malformed validation is conservative (`error` or `warning`).
+
+The run registry inherits status from the manifest. `/runs?failed=1` is therefore more accurate for newly written runs. Old manifests and old registry rows are not migrated.
 
 ## Manual Apply Flow
 
@@ -177,14 +192,26 @@ wp factory health
 
 ## REST Visibility
 
-Primary endpoints:
+Control-plane endpoints:
 
 ```text
+/wp-json/factory/v1/runs
 /wp-json/factory/v1/run/latest
 /wp-json/factory/v1/run/{file}
 ```
 
-These responses preserve `blueprint` and expose `plan`, `execution`, `results`, and `validation` for UI/AI inspection. `/runs` remains a lightweight history endpoint.
+- `/runs` is lightweight registry-only run history with summary fields.
+- `/run/latest` returns full latest run details.
+- `/run/{file}` returns full historical run details.
+
+`/runs` does not load full manifests and does not expose `blueprint`. New registry rows include:
+
+- `plan_summary`;
+- `execution_count`;
+- `validation_count`;
+- `results_summary`.
+
+Old rows use safe defaults. `wp factory runs --format=json` includes the enriched fields; table output remains unchanged.
 
 ## Known Non-Blocking Issues
 
@@ -217,6 +244,6 @@ Do not add these yet:
 
 1. Final smoke test.
 2. Demo script.
-3. REST run history/details enrichment.
+3. REST/control-plane polish only where UI needs it.
 4. Execution-aware fix polish later, only if real repair cases need richer reporting.
 5. AI quality layer later.

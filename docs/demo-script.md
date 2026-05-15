@@ -125,6 +125,30 @@ Expected result:
 - `validation.count`: `28`;
 - `blueprint`: `True`.
 
+## Step 9 - REST Run History Summary
+
+```powershell
+$runs = Invoke-RestMethod -UseBasicParsing http://localhost:8080/wp-json/factory/v1/runs
+
+$runs.status
+$runs.runs[0].file
+$runs.runs[0].status
+$runs.runs[0].plan_summary
+$runs.runs[0].execution_count
+$runs.runs[0].validation_count
+$runs.runs[0].results_summary
+$runs.runs[0].blueprint -eq $null
+```
+
+Expected result:
+
+- latest row status: `ok`;
+- plan summary: `0 create / 0 update / 16 skip`;
+- `execution_count`: `16`;
+- `validation_count`: `28`;
+- `results_summary.ok`: `28`;
+- `blueprint`: absent / `True` for the null check.
+
 ## Optional: Demonstrate Repair Flow
 
 Create a temporary eval-file that deletes the generated `Backend Developer` post:
@@ -204,6 +228,7 @@ During the demo, emphasize:
 - dry-run after apply proves convergence;
 - validation proves the actual WordPress state;
 - the manifest stores run history;
+- `/runs` provides lightweight run history summaries;
 - REST exposes the data for UI/AI workflows.
 
 ## Known Demo Notes
