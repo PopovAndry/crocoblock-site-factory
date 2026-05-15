@@ -14,6 +14,8 @@ function factory_save_run_manifest(
 	array $execution = []
 ): string {
 
+	$status = factory_resolve_run_status_from_validation( $validation );
+
 	$upload_dir = wp_upload_dir();
 
 	$dir = trailingslashit(
@@ -59,6 +61,46 @@ function factory_save_run_manifest(
 	}
 
 	return $path;
+}
+
+function factory_resolve_run_status_from_validation( array $validation ): string {
+	$checks = $validation['checks'] ?? null;
+
+	if ( ! is_array( $checks ) ) {
+		return 'error';
+	}
+
+	if ( empty( $checks ) ) {
+		return 'warning';
+	}
+
+	$has_warning = false;
+
+	foreach ( $checks as $check ) {
+		if ( ! is_array( $check ) ) {
+			$has_warning = true;
+			continue;
+		}
+
+		$status = $check['status'] ?? null;
+
+		if ( 'error' === $status ) {
+			return 'error';
+		}
+
+		if ( 'warning' === $status ) {
+			$has_warning = true;
+			continue;
+		}
+
+		if ( 'ok' === $status ) {
+			continue;
+		}
+
+		$has_warning = true;
+	}
+
+	return $has_warning ? 'warning' : 'ok';
 }
 
 function factory_build_manifest_results( array $validation ): array {
