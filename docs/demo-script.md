@@ -1,84 +1,84 @@
-# Crocoblock Site Factory — Observable Blueprint Execution Demo
+# Crocoblock Site Factory - Observable Blueprint Execution Demo
 
-## Передумови
+## Prerequisites
 
-- Docker containers запущені.
-- Поточний repo clean.
-- Generated blueprint існує:
+- Docker containers are running.
+- The current repository is clean.
+- The generated blueprint exists:
 
 ```text
 /var/www/blueprints/generated/ai-blueprint.json
 ```
 
-## Step 1 — confirm repository state
+## Step 1 - Confirm Repository State
 
 ```powershell
 git status
 git log --oneline --decorate -5
 ```
 
-Очікування: робоче дерево чисте, видимий поточний checkpoint branch/commit.
+Expected: the working tree is clean and the current checkpoint branch/commit is visible.
 
-## Step 2 — confirm Docker state
+## Step 2 - Confirm Docker State
 
 ```powershell
 docker compose ps
 ```
 
-Очікування: WordPress, database і WP-CLI середовище доступні.
+Expected: WordPress, database, and WP-CLI environment are available.
 
-## Step 3 — check runtime health
+## Step 3 - Check Runtime Health
 
 ```powershell
 docker compose run --rm wpcli wp factory health
 docker compose run --rm wpcli wp factory doctor
 ```
 
-Очікування:
+Expected:
 
-- runtime health без критичних помилок;
-- doctor показує, що desired state синхронізований або готовий до перевірки.
+- runtime health has no critical errors;
+- doctor shows the desired state is in sync or ready for inspection.
 
-## Step 4 — show convergence plan
+## Step 4 - Show Convergence Plan
 
 ```powershell
 docker compose run --rm wpcli wp factory dry-run /var/www/blueprints/generated/ai-blueprint.json
 ```
 
-Очікуваний результат:
+Expected result:
 
 - 0 create;
 - 0 update;
 - 16 unchanged.
 
-## Step 5 — apply blueprint and save manifest
+## Step 5 - Apply Blueprint And Save Manifest
 
 ```powershell
 docker compose run --rm wpcli wp factory apply /var/www/blueprints/generated/ai-blueprint.json
 ```
 
-Пояснення:
+Explanation:
 
-- apply застосовує blueprint;
-- adapters виконують потрібні runtime/durable операції;
-- engine збирає execution trace;
-- engine будує post-apply convergence plan;
-- engine валідовує WordPress state;
-- engine зберігає run manifest.
+- apply applies the blueprint;
+- adapters perform the required runtime/durable operations;
+- the engine collects the execution trace;
+- the engine builds the post-apply convergence plan;
+- the engine validates WordPress state;
+- the engine saves the run manifest.
 
-## Step 6 — inspect latest run
+## Step 6 - Inspect Latest Run
 
 ```powershell
 docker compose run --rm wpcli wp factory latest
 ```
 
-Очікуваний output:
+Expected output:
 
 - Plan Summary;
 - Execution items = 16;
 - Validation checks = 28.
 
-Очікувані execution categories:
+Expected execution categories:
 
 - plugin;
 - theme;
@@ -92,20 +92,20 @@ docker compose run --rm wpcli wp factory latest
 - single;
 - content.
 
-## Step 7 — validate and doctor
+## Step 7 - Validate And Doctor
 
 ```powershell
 docker compose run --rm wpcli wp factory validate
 docker compose run --rm wpcli wp factory doctor
 ```
 
-Очікування:
+Expected:
 
 - validation complete;
 - system healthy;
 - all layers in sync.
 
-## Step 8 — REST visibility
+## Step 8 - REST Visibility
 
 ```powershell
 $response = Invoke-RestMethod -UseBasicParsing http://localhost:8080/wp-json/factory/v1/run/latest
@@ -118,16 +118,16 @@ $response.run.validation.count
 $response.run.blueprint -ne $null
 ```
 
-Очікуваний результат:
+Expected result:
 
 - `status`: `ok`;
 - `execution.count`: `16`;
 - `validation.count`: `28`;
 - `blueprint`: `True`.
 
-## Optional: demonstrate repair flow
+## Optional: Demonstrate Repair Flow
 
-Створіть тимчасовий eval-file, який видаляє generated `Backend Developer` post:
+Create a temporary eval-file that deletes the generated `Backend Developer` post:
 
 ```powershell
 @'
@@ -146,26 +146,26 @@ docker compose run --rm wpcli wp eval-file /var/www/html/tmp-delete-backend-deve
 Remove-Item .\wp\tmp-delete-backend-developer.php
 ```
 
-Покажіть drift:
+Show drift:
 
 ```powershell
 docker compose run --rm wpcli wp factory doctor
 docker compose run --rm wpcli wp factory dry-run /var/www/blueprints/generated/ai-blueprint.json
 ```
 
-Очікування:
+Expected:
 
-- doctor показує `Missing content item: job -> Backend Developer`;
-- dry-run показує `+ Create content item: job -> Backend Developer`.
+- doctor shows `Missing content item: job -> Backend Developer`;
+- dry-run shows `+ Create content item: job -> Backend Developer`.
 
-Виконайте repair:
+Run repair:
 
 ```powershell
 docker compose run --rm wpcli wp factory fix
 docker compose run --rm wpcli wp factory latest
 ```
 
-Очікування:
+Expected:
 
 - `fix` recreates `Backend Developer`;
 - latest prompt: `Fix active blueprint`;
@@ -185,30 +185,32 @@ $repair.run.execution.count
 $repair.run.validation.count
 ```
 
-Фінальна перевірка:
+Final verification:
 
 ```powershell
 docker compose run --rm wpcli wp factory validate
 docker compose run --rm wpcli wp factory doctor
 ```
 
-Очікування: validation complete, doctor green.
+Expected: validation complete, doctor green.
 
-## Demo narration
+## Demo Narration
 
-Під час demo варто підкреслити:
+During the demo, emphasize:
 
-- blueprint є desired state;
-- apply виконує adapters у стабільному порядку;
-- execution trace показує, що фактично сталося;
-- dry-run після apply доводить convergence;
-- validation доводить фактичний WordPress state;
-- manifest зберігає історію run;
-- REST відкриває ці дані для UI/AI.
+- the blueprint is the desired state;
+- apply executes adapters in a stable order;
+- the execution trace shows what actually happened;
+- dry-run after apply proves convergence;
+- validation proves the actual WordPress state;
+- the manifest stores run history;
+- REST exposes the data for UI/AI workflows.
 
-## Known demo notes
+## Known Demo Notes
 
-- Для deterministic demo використовуйте manual apply.
-- Уникайте `wp factory ai --no-cache` під час demo, бо AI може змінити content values.
-- Codex runtime не може виконати повні WP checks, бо там немає повного WordPress core.
-- У PowerShell `curl` є alias; для REST demo використовуйте `Invoke-RestMethod`.
+- Use manual apply for a deterministic demo.
+- Avoid `wp factory ai --no-cache` during the demo because AI can change content values.
+- The Codex runtime cannot run full WP checks because it does not include a full WordPress core.
+- Runtime verification is done locally in the full WordPress/Docker environment.
+- In PowerShell, `curl` is an alias; use `Invoke-RestMethod` for REST demos.
+- Command strings that appear in terminal output can be paste artifacts, not Factory output.

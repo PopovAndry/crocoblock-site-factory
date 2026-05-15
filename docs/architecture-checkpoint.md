@@ -1,19 +1,19 @@
-# Crocoblock Site Factory: architecture checkpoint
+# Crocoblock Site Factory: Architecture Checkpoint
 
-## Поточний checkpoint
+## Current Checkpoint
 
-- Current main checkpoint: `817539d`
+- Current docs checkpoint: `b6ebd84`
 - Original execution coverage checkpoint: `23f4a0c`
 - Working tree: clean
-- Execution coverage: complete for current MVP blueprint
+- Execution coverage: complete for the current MVP blueprint
 - Execution-aware fix v1: implemented and verified
 
-## Що це таке
+## What It Is
 
-Crocoblock Site Factory - це infrastructure-style automation engine для WordPress/Crocoblock.
-Напрямок розвитку: Infrastructure as Code для WordPress-сайтів, де blueprint описує бажаний стан, а engine застосовує, перевіряє і документує результат.
+Crocoblock Site Factory is an infrastructure-style automation engine for WordPress/Crocoblock.
+The direction is Infrastructure as Code for WordPress sites: a blueprint describes the desired state, and the engine applies, verifies, records, and exposes the result.
 
-## Поточний pipeline
+## Current Pipeline
 
 ```text
 Blueprint
@@ -27,9 +27,9 @@ Blueprint
   -> Doctor / Health
 ```
 
-## Execution-aware fix
+## Execution-Aware Fix
 
-`wp factory fix` тепер має repair manifest flow:
+`wp factory fix` now has a repair manifest flow:
 
 ```text
 Drift
@@ -42,48 +42,48 @@ Drift
   -> REST
 ```
 
-Поточний v1 зберігає manifest тільки після actual repair. No-op і `--dry-run` не пишуть manifest.
+The current v1 writes a manifest only after an actual repair. No-op and `--dry-run` runs do not write manifests.
 
-Fix manifest містить:
+The fix manifest includes:
 
 - `prompt`: `Fix active blueprint`;
-- `execution` items тільки з adapters, які фактично запускались;
+- `execution` items from adapters that actually ran;
 - post-fix `plan`;
 - full `validation`;
 - validation-derived `results`;
-- visibility через `wp factory latest` і REST `/run/latest`.
+- visibility through `wp factory latest` and REST `/run/latest`.
 
-Перевірений сценарій: видалений generated `Backend Developer` job post, `doctor` виявив drift, `dry-run` показав create content item, `fix` відновив post через `Factory_Content_Adapter`, latest run мав `execution.count = 2`, post-fix plan `0 create / 0 update / 16 skip`, validation `28 checks`, після цього `doctor` green.
+Verified scenario: the generated `Backend Developer` job post was deleted, `doctor` detected drift, `dry-run` showed a content item create action, `fix` restored the post through `Factory_Content_Adapter`, the latest run had `execution.count = 2`, the post-fix plan was `0 create / 0 update / 16 skip`, validation had `28 checks`, and `doctor` was green afterward.
 
-## Manual apply flow
+## Manual Apply Flow
 
 `wp factory apply /path/to/blueprint.json`:
 
-1. читає blueprint;
-2. застосовує його через adapters;
-3. збирає `execution`;
-4. будує post-apply convergence plan;
-5. запускає validation;
-6. зберігає run manifest;
-7. відкриває результат через CLI/REST.
+1. Reads the blueprint.
+2. Applies it through adapters.
+3. Collects `execution`.
+4. Builds a post-apply convergence plan.
+5. Runs validation.
+6. Saves a run manifest.
+7. Exposes the result through CLI and REST.
 
-## AI flow
+## AI Flow
 
 `wp factory ai ...`:
 
-1. визначає preset;
-2. генерує або покращує blueprint через AI;
-3. виконує contract validation;
-4. створює snapshot;
-5. запускає apply;
-6. запускає dry-run;
-7. запускає validation;
-8. зберігає manifest;
-9. виконує rollback у разі validation failure.
+1. Detects the preset.
+2. Generates or enhances the blueprint through AI.
+3. Runs contract validation.
+4. Creates a snapshot.
+5. Applies the blueprint.
+6. Runs dry-run.
+7. Runs validation.
+8. Saves the manifest.
+9. Rolls back on validation failure.
 
-## MVP blueprint coverage
+## MVP Blueprint Coverage
 
-Поточний MVP blueprint покриває:
+The current MVP blueprint covers:
 
 - theme;
 - plugin;
@@ -97,9 +97,9 @@ Fix manifest містить:
 - render/archive page;
 - single template.
 
-## Adapter architecture
+## Adapter Architecture
 
-Поточні adapters:
+Current adapters:
 
 - Plugin;
 - Theme;
@@ -111,9 +111,9 @@ Fix manifest містить:
 - Single;
 - Content.
 
-## Execution coverage
+## Execution Coverage
 
-Очікуваний execution trace для current job-board MVP містить 16 items:
+The expected execution trace for the current job-board MVP contains 16 items:
 
 ```text
 = skip plugin jet-engine - Plugin already active: jet-engine
@@ -148,9 +148,9 @@ Coverage groups:
 - single;
 - content.
 
-## Manifest model
+## Manifest Model
 
-Run manifest зараз містить:
+A run manifest currently contains:
 
 - `blueprint`;
 - `plan`;
@@ -162,9 +162,9 @@ Run manifest зараз містить:
 - `preset`;
 - `timestamp`.
 
-## CLI commands
+## CLI Commands
 
-Основні commands:
+Primary commands:
 
 ```text
 wp factory apply
@@ -175,27 +175,27 @@ wp factory doctor
 wp factory health
 ```
 
-## REST visibility
+## REST Visibility
 
-Основний endpoint:
+Primary endpoints:
 
 ```text
 /wp-json/factory/v1/run/latest
 /wp-json/factory/v1/run/{file}
 ```
 
-Вони зберігають `blueprint` у відповіді та відкривають `plan`, `execution`, `results`, `validation` для UI/AI inspection.
+These responses preserve `blueprint` and expose `plan`, `execution`, `results`, and `validation` for UI/AI inspection. `/runs` remains a lightweight history endpoint.
 
-## Known non-blocking issues
+## Known Non-Blocking Issues
 
-- Codex checkout не має повного WordPress core, тому runtime WP-CLI checks там падають до bootstrap.
-- Runtime verification виконується локально у повному WordPress/Docker середовищі.
-- У PowerShell `curl` може бути alias; для реального curl краще використовувати `curl.exe`.
-- Рядки команд у terminal output інколи є paste artifacts, а не output Factory.
+- The Codex checkout does not include a full WordPress core, so runtime WP-CLI checks fail before Factory bootstrap there.
+- Runtime verification is done locally in the full WordPress/Docker environment.
+- In PowerShell, `curl` can be an alias; use `curl.exe` for real curl or `Invoke-RestMethod` for REST demos.
+- Command strings that appear in terminal output can be paste artifacts, not Factory output.
 
-## What not to build yet
+## What Not To Build Yet
 
-Поки не варто додавати:
+Do not add these yet:
 
 - event bus;
 - async queue;
@@ -204,7 +204,7 @@ wp factory health
 - strict interface enforcement;
 - large adapter refactor.
 
-## Progress estimate
+## Progress Estimate
 
 - Core engine foundation: ~85%
 - Execution observability: ~85-90%
@@ -213,7 +213,7 @@ wp factory health
 - AI layer: ~35-40%
 - Production platform: ~45%
 
-## Recommended next steps
+## Recommended Next Steps
 
 1. Final smoke test.
 2. Demo script.
