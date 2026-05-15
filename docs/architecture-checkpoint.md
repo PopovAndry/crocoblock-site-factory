@@ -2,9 +2,11 @@
 
 ## Поточний checkpoint
 
-- Code checkpoint commit: `23f4a0c`
+- Current main checkpoint: `817539d`
+- Original execution coverage checkpoint: `23f4a0c`
 - Working tree: clean
 - Execution coverage: complete for current MVP blueprint
+- Execution-aware fix v1: implemented and verified
 
 ## Що це таке
 
@@ -24,6 +26,34 @@ Blueprint
   -> REST visibility
   -> Doctor / Health
 ```
+
+## Execution-aware fix
+
+`wp factory fix` тепер має repair manifest flow:
+
+```text
+Drift
+  -> Doctor
+  -> Fix
+  -> Execution trace
+  -> Post-fix convergence plan
+  -> Validation proof
+  -> Manifest
+  -> REST
+```
+
+Поточний v1 зберігає manifest тільки після actual repair. No-op і `--dry-run` не пишуть manifest.
+
+Fix manifest містить:
+
+- `prompt`: `Fix active blueprint`;
+- `execution` items тільки з adapters, які фактично запускались;
+- post-fix `plan`;
+- full `validation`;
+- validation-derived `results`;
+- visibility через `wp factory latest` і REST `/run/latest`.
+
+Перевірений сценарій: видалений generated `Backend Developer` job post, `doctor` виявив drift, `dry-run` показав create content item, `fix` відновив post через `Factory_Content_Adapter`, latest run мав `execution.count = 2`, post-fix plan `0 create / 0 update / 16 skip`, validation `28 checks`, після цього `doctor` green.
 
 ## Manual apply flow
 
@@ -151,9 +181,10 @@ wp factory health
 
 ```text
 /wp-json/factory/v1/run/latest
+/wp-json/factory/v1/run/{file}
 ```
 
-Він зберігає `blueprint` у відповіді та відкриває `plan`, `execution`, `results`, `validation` для UI/AI inspection.
+Вони зберігають `blueprint` у відповіді та відкривають `plan`, `execution`, `results`, `validation` для UI/AI inspection.
 
 ## Known non-blocking issues
 
@@ -187,5 +218,5 @@ wp factory health
 1. Final smoke test.
 2. Demo script.
 3. REST run history/details enrichment.
-4. Execution-aware fix later.
+4. Execution-aware fix polish later, only if real repair cases need richer reporting.
 5. AI quality layer later.

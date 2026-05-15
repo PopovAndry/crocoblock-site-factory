@@ -125,6 +125,75 @@ $response.run.blueprint -ne $null
 - `validation.count`: `28`;
 - `blueprint`: `True`.
 
+## Optional: demonstrate repair flow
+
+Створіть тимчасовий eval-file, який видаляє generated `Backend Developer` post:
+
+```powershell
+@'
+<?php
+$post = get_page_by_title( 'Backend Developer', OBJECT, 'job' );
+
+if ( $post ) {
+	wp_delete_post( $post->ID, true );
+	WP_CLI::log( 'Deleted Backend Developer job post.' );
+} else {
+	WP_CLI::log( 'Backend Developer job post was already missing.' );
+}
+'@ | Set-Content -Encoding UTF8 .\wp\tmp-delete-backend-developer.php
+
+docker compose run --rm wpcli wp eval-file /var/www/html/tmp-delete-backend-developer.php
+Remove-Item .\wp\tmp-delete-backend-developer.php
+```
+
+Покажіть drift:
+
+```powershell
+docker compose run --rm wpcli wp factory doctor
+docker compose run --rm wpcli wp factory dry-run /var/www/blueprints/generated/ai-blueprint.json
+```
+
+Очікування:
+
+- doctor показує `Missing content item: job -> Backend Developer`;
+- dry-run показує `+ Create content item: job -> Backend Developer`.
+
+Виконайте repair:
+
+```powershell
+docker compose run --rm wpcli wp factory fix
+docker compose run --rm wpcli wp factory latest
+```
+
+Очікування:
+
+- `fix` recreates `Backend Developer`;
+- latest prompt: `Fix active blueprint`;
+- execution items: `skip Frontend Developer`, `create Backend Developer`;
+- `execution.count`: `2`;
+- post-fix plan: `0 create / 0 update / 16 skip`;
+- validation checks: `28`.
+
+REST verification:
+
+```powershell
+$repair = Invoke-RestMethod -UseBasicParsing http://localhost:8080/wp-json/factory/v1/run/latest
+
+$repair.status
+$repair.run.prompt
+$repair.run.execution.count
+$repair.run.validation.count
+```
+
+Фінальна перевірка:
+
+```powershell
+docker compose run --rm wpcli wp factory validate
+docker compose run --rm wpcli wp factory doctor
+```
+
+Очікування: validation complete, doctor green.
+
 ## Demo narration
 
 Під час demo варто підкреслити:
