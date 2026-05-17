@@ -330,6 +330,20 @@ class Factory_Render_Adapter {
 					?>
 
 					<article class="factory-card" style="border: 1px solid #e5e5e5; border-radius: 18px; padding: 24px;">
+						<?php if ( has_post_thumbnail() ) : ?>
+							<a href="<?php the_permalink(); ?>" style="display: block; margin: -24px -24px 20px; overflow: hidden; border-radius: 18px 18px 0 0;">
+								<?php
+								echo get_the_post_thumbnail(
+									get_the_ID(),
+									'medium_large',
+									[
+										'style' => 'display: block; width: 100%; height: 220px; object-fit: cover;',
+									]
+								);
+								?>
+							</a>
+						<?php endif; ?>
+
 						<h2 style="font-size: 24px; margin: 0 0 16px;">
 							<a href="<?php the_permalink(); ?>" style="text-decoration: none;">
 								<?php the_title(); ?>

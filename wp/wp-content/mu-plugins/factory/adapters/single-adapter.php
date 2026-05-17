@@ -137,6 +137,20 @@ class Factory_Single_Adapter {
 			<article <?php post_class( 'factory-single' ); ?>>
 
 				<header style="margin-bottom: 48px;">
+					<?php if ( has_post_thumbnail() ) : ?>
+						<div style="margin-bottom: 32px; overflow: hidden; border-radius: 24px;">
+							<?php
+							echo get_the_post_thumbnail(
+								get_the_ID(),
+								'large',
+								[
+									'style' => 'display: block; width: 100%; height: min(56vw, 520px); object-fit: cover;',
+								]
+							);
+							?>
+						</div>
+					<?php endif; ?>
+
 					<?php
 					$address = get_post_meta( get_the_ID(), 'address', true );
 

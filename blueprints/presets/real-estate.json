@@ -8,6 +8,13 @@
       "primary": "#0f766e",
       "accent": "#14b8a6",
       "background": "#ecfeff"
+    },
+    "assets": {
+      "property_images": {
+        "Apartment": "blueprints/assets/real-estate/apartment.jpg",
+        "House": "blueprints/assets/real-estate/house.jpg",
+        "Commercial": "blueprints/assets/real-estate/commercial.jpg"
+      }
     }
   },
   "theme": {
