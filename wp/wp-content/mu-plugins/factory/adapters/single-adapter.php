@@ -113,6 +113,10 @@ class Factory_Single_Adapter {
 			return '';
 		}
 
+		if ( 'property' === $post_type ) {
+			return $this->render_property_single( $config, $blueprint );
+		}
+
 		$layout = $config['layout'] ?? [];
 
 			if ( empty( $layout ) && ! empty( $config['fields'] ) ) {
@@ -219,6 +223,205 @@ class Factory_Single_Adapter {
 
 		<?php
 		return ob_get_clean();
+	}
+
+	private function render_property_single( array $config, array $blueprint ): string {
+		$post_id       = get_the_ID();
+		$style_tokens  = $this->get_site_style_tokens( $blueprint );
+		$primary       = $style_tokens['primary'];
+		$accent        = $style_tokens['accent'];
+		$background    = $style_tokens['background'];
+		$title         = get_the_title( $post_id );
+		$price         = get_post_meta( $post_id, 'price', true );
+		$address       = get_post_meta( $post_id, 'address', true );
+		$bedrooms      = get_post_meta( $post_id, 'bedrooms', true );
+		$bathrooms     = get_post_meta( $post_id, 'bathrooms', true );
+		$property_size = get_post_meta( $post_id, 'property_size', true );
+		$district      = get_post_meta( $post_id, 'district', true );
+		$purpose       = $this->get_property_meta_or_term( $post_id, 'purpose' );
+		$property_type = $this->get_property_meta_or_term( $post_id, 'property_type' );
+		$content       = apply_filters( 'the_content', get_the_content() );
+		$stats         = [];
+
+		if ( is_numeric( $bedrooms ) && (float) $bedrooms > 0 ) {
+			$stats[] = number_format( (float) $bedrooms ) . ' bed';
+		}
+
+		if ( '' !== $bathrooms && is_numeric( $bathrooms ) && (float) $bathrooms > 0 ) {
+			$stats[] = number_format( (float) $bathrooms ) . ' bath';
+		}
+
+		if ( '' !== $property_size && is_numeric( $property_size ) ) {
+			$stats[] = number_format( (float) $property_size ) . ' sq m';
+		}
+
+		ob_start();
+		?>
+
+		<main class="factory-single-wrap factory-property-single-wrap" style="max-width: 1180px; margin: 64px auto 80px; padding: 0 24px;">
+			<article <?php post_class( 'factory-single factory-property-single', $post_id ); ?>>
+				<header style="margin-bottom: 34px;">
+					<?php if ( has_post_thumbnail( $post_id ) ) : ?>
+						<div style="margin-bottom: 28px; overflow: hidden; border-radius: 24px; background: <?php echo esc_attr( $background ); ?>; box-shadow: 0 20px 48px rgba(15, 118, 110, 0.12);">
+							<?php
+							echo get_the_post_thumbnail(
+								$post_id,
+								'large',
+								[
+									'style'   => 'display: block; width: 100%; height: min(52vw, 440px); object-fit: cover;',
+									'loading' => 'eager',
+								]
+							);
+							?>
+						</div>
+					<?php endif; ?>
+
+					<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px;">
+						<?php if ( '' !== $purpose ) : ?>
+							<span style="display: inline-flex; align-items: center; border-radius: 999px; background: <?php echo esc_attr( $primary ); ?>; color: #fff; padding: 8px 12px; font-size: 13px; font-weight: 800; letter-spacing: 0;">
+								<?php echo esc_html( $purpose ); ?>
+							</span>
+						<?php endif; ?>
+
+						<?php if ( '' !== $property_type ) : ?>
+							<span style="display: inline-flex; align-items: center; border-radius: 999px; background: <?php echo esc_attr( $background ); ?>; color: <?php echo esc_attr( $primary ); ?>; padding: 8px 12px; font-size: 13px; font-weight: 800; letter-spacing: 0;">
+								<?php echo esc_html( $property_type ); ?>
+							</span>
+						<?php endif; ?>
+					</div>
+
+					<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 28px; align-items: start;">
+						<div>
+							<h1 style="font-size: clamp(32px, 4vw, 54px); line-height: 1.08; margin: 0 0 16px; color: #10201d;">
+								<?php echo esc_html( $title ); ?>
+							</h1>
+
+							<?php if ( '' !== $address ) : ?>
+								<div style="color: #52635f; font-size: 16px; line-height: 1.55; margin-bottom: 8px;">
+									<?php echo esc_html( $address ); ?>
+								</div>
+							<?php endif; ?>
+
+							<?php if ( '' !== $district ) : ?>
+								<div style="color: <?php echo esc_attr( $primary ); ?>; font-size: 14px; line-height: 1.45; font-weight: 800;">
+									<?php echo esc_html( $district ); ?>
+								</div>
+							<?php endif; ?>
+						</div>
+
+						<?php if ( '' !== $price ) : ?>
+							<div style="border: 1px solid #d7eee9; border-radius: 20px; background: #fff; padding: 22px; box-shadow: 0 14px 34px rgba(15, 118, 110, 0.09);">
+								<div style="color: #52635f; font-size: 13px; font-weight: 800; margin-bottom: 8px; text-transform: uppercase;">
+									Price
+								</div>
+								<div style="color: <?php echo esc_attr( $primary ); ?>; font-size: 32px; line-height: 1.1; font-weight: 900;">
+									<?php echo esc_html( $this->format_property_price( $price ) ); ?>
+								</div>
+							</div>
+						<?php endif; ?>
+					</div>
+				</header>
+
+				<?php if ( ! empty( $stats ) ) : ?>
+					<div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 34px;">
+						<?php foreach ( $stats as $stat ) : ?>
+							<span style="display: inline-flex; align-items: center; border-radius: 999px; background: <?php echo esc_attr( $background ); ?>; color: #213532; padding: 10px 14px; font-size: 14px; font-weight: 800;">
+								<?php echo esc_html( $stat ); ?>
+							</span>
+						<?php endforeach; ?>
+					</div>
+				<?php endif; ?>
+
+				<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 32px; align-items: start;">
+					<section style="border-top: 1px solid #dfecea; padding-top: 28px;">
+						<h2 style="font-size: 24px; line-height: 1.2; margin: 0 0 14px; color: #10201d;">
+							Property description
+						</h2>
+
+						<div style="color: #263633; font-size: 18px; line-height: 1.75;">
+							<?php echo wp_kses_post( $content ); ?>
+						</div>
+					</section>
+
+					<aside id="factory-property-contact" style="border: 1px solid #d7eee9; border-radius: 20px; background: #fff; padding: 24px; box-shadow: 0 16px 38px rgba(15, 118, 110, 0.1);">
+						<h2 style="font-size: 22px; line-height: 1.25; margin: 0 0 10px; color: #10201d;">
+							Interested in this property?
+						</h2>
+
+						<p style="color: #52635f; font-size: 15px; line-height: 1.6; margin: 0 0 18px;">
+							Contact the agency to schedule a viewing or request more details.
+						</p>
+
+						<a href="#factory-property-contact" style="display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: <?php echo esc_attr( $accent ); ?>; color: #fff; padding: 11px 16px; font-size: 14px; font-weight: 900; text-decoration: none;">
+							Contact agency
+						</a>
+					</aside>
+				</div>
+			</article>
+		</main>
+
+		<?php
+		return ob_get_clean();
+	}
+
+	private function get_site_style_tokens( array $blueprint ): array {
+		$style = $blueprint['site']['style'] ?? [];
+
+		return [
+			'primary'    => $this->sanitize_color_token( $style['primary'] ?? '', '#0f766e' ),
+			'accent'     => $this->sanitize_color_token( $style['accent'] ?? '', '#14b8a6' ),
+			'background' => $this->sanitize_color_token( $style['background'] ?? '', '#ecfeff' ),
+		];
+	}
+
+	private function sanitize_color_token( $value, string $fallback ): string {
+		if ( ! is_string( $value ) || '' === trim( $value ) ) {
+			return $fallback;
+		}
+
+		if ( function_exists( 'sanitize_hex_color' ) ) {
+			$sanitized = sanitize_hex_color( $value );
+
+			return $sanitized ?: $fallback;
+		}
+
+		return preg_match( '/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/', $value ) ? $value : $fallback;
+	}
+
+	private function get_property_meta_or_term( int $post_id, string $key ): string {
+		$value = get_post_meta( $post_id, $key, true );
+
+		if ( is_array( $value ) ) {
+			$value = reset( $value );
+		}
+
+		if ( '' !== $value && null !== $value ) {
+			return (string) $value;
+		}
+
+		$terms = wp_get_post_terms( $post_id, $key, [ 'fields' => 'names' ] );
+
+		if ( is_wp_error( $terms ) || empty( $terms ) ) {
+			return '';
+		}
+
+		return (string) $terms[0];
+	}
+
+	private function format_property_price( $price ): string {
+		if ( is_array( $price ) ) {
+			$price = reset( $price );
+		}
+
+		if ( '' === $price || null === $price ) {
+			return '';
+		}
+
+		if ( is_numeric( $price ) ) {
+			return '$' . number_format( (float) $price );
+		}
+
+		return (string) $price;
 	}
 }
 
