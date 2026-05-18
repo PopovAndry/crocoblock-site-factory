@@ -299,10 +299,13 @@ class Factory_Render_Adapter {
 			return '';
 		}
 
+		$is_property_listing = 'property' === $post_type;
+		$style_tokens        = $this->get_site_style_tokens( $blueprint );
+
 		$query = new WP_Query( [
 			'post_type'      => $post_type,
 			'post_status'    => 'publish',
-			'posts_per_page' => 12,
+			'posts_per_page' => $is_property_listing ? 30 : 12,
 			'orderby'        => 'ID',
 			'order'          => 'ASC',
 		] );
@@ -327,6 +330,11 @@ class Factory_Render_Adapter {
 				<?php
 				while ( $query->have_posts() ) :
 					$query->the_post();
+
+					if ( $is_property_listing ) {
+						echo $this->render_property_card( get_the_ID(), $style_tokens );
+						continue;
+					}
 					?>
 
 					<article class="factory-card" style="border: 1px solid #e5e5e5; border-radius: 18px; padding: 24px;">
@@ -383,6 +391,176 @@ class Factory_Render_Adapter {
 		wp_reset_postdata();
 
 		return ob_get_clean();
+	}
+
+	private function render_property_card( int $post_id, array $style_tokens ): string {
+		$primary       = $style_tokens['primary'];
+		$accent        = $style_tokens['accent'];
+		$background    = $style_tokens['background'];
+		$permalink     = get_permalink( $post_id );
+		$title         = get_the_title( $post_id );
+		$price         = get_post_meta( $post_id, 'price', true );
+		$address       = get_post_meta( $post_id, 'address', true );
+		$bedrooms      = get_post_meta( $post_id, 'bedrooms', true );
+		$bathrooms     = get_post_meta( $post_id, 'bathrooms', true );
+		$property_size = get_post_meta( $post_id, 'property_size', true );
+		$district      = get_post_meta( $post_id, 'district', true );
+		$purpose       = $this->get_property_meta_or_term( $post_id, 'purpose' );
+		$property_type = $this->get_property_meta_or_term( $post_id, 'property_type' );
+		$stats         = [];
+
+		if ( is_numeric( $bedrooms ) && (float) $bedrooms > 0 ) {
+			$stats[] = number_format( (float) $bedrooms ) . ' bed';
+		}
+
+		if ( '' !== $bathrooms && is_numeric( $bathrooms ) && (float) $bathrooms > 0 ) {
+			$stats[] = number_format( (float) $bathrooms ) . ' bath';
+		}
+
+		if ( '' !== $property_size && is_numeric( $property_size ) ) {
+			$stats[] = number_format( (float) $property_size ) . ' sq m';
+		}
+
+		ob_start();
+		?>
+
+		<article class="factory-property-card" style="background: #fff; border: 1px solid #d7eee9; border-radius: 20px; overflow: hidden; box-shadow: 0 16px 38px rgba(15, 118, 110, 0.11);">
+			<a href="<?php echo esc_url( $permalink ); ?>" style="display: block; position: relative; min-height: 232px; background: <?php echo esc_attr( $background ); ?>; text-decoration: none;">
+				<?php if ( has_post_thumbnail( $post_id ) ) : ?>
+					<?php
+					echo get_the_post_thumbnail(
+						$post_id,
+						'medium_large',
+						[
+							'style'   => 'display: block; width: 100%; height: 232px; object-fit: cover;',
+							'loading' => 'lazy',
+						]
+					);
+					?>
+				<?php else : ?>
+					<div style="height: 232px; display: flex; align-items: center; justify-content: center; color: <?php echo esc_attr( $primary ); ?>; font-weight: 700;">
+						<?php echo esc_html( $property_type ?: 'Property' ); ?>
+					</div>
+				<?php endif; ?>
+
+				<div style="position: absolute; left: 16px; top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+					<?php if ( '' !== $purpose ) : ?>
+						<span style="display: inline-flex; align-items: center; border-radius: 999px; background: <?php echo esc_attr( $primary ); ?>; color: #fff; padding: 7px 11px; font-size: 12px; font-weight: 700; letter-spacing: 0;">
+							<?php echo esc_html( $purpose ); ?>
+						</span>
+					<?php endif; ?>
+
+					<?php if ( '' !== $property_type ) : ?>
+						<span style="display: inline-flex; align-items: center; border-radius: 999px; background: rgba(255, 255, 255, 0.92); color: <?php echo esc_attr( $primary ); ?>; padding: 7px 11px; font-size: 12px; font-weight: 700; letter-spacing: 0;">
+							<?php echo esc_html( $property_type ); ?>
+						</span>
+					<?php endif; ?>
+				</div>
+			</a>
+
+			<div style="padding: 22px 22px 24px;">
+				<?php if ( '' !== $price ) : ?>
+					<div style="color: <?php echo esc_attr( $primary ); ?>; font-size: 24px; line-height: 1.15; font-weight: 800; margin-bottom: 10px;">
+						<?php echo esc_html( $this->format_property_price( $price ) ); ?>
+					</div>
+				<?php endif; ?>
+
+				<h2 style="font-size: 21px; line-height: 1.25; margin: 0 0 10px;">
+					<a href="<?php echo esc_url( $permalink ); ?>" style="color: #10201d; text-decoration: none;">
+						<?php echo esc_html( $title ); ?>
+					</a>
+				</h2>
+
+				<?php if ( '' !== $address ) : ?>
+					<div style="color: #52635f; font-size: 14px; line-height: 1.5; margin-bottom: 8px;">
+						<?php echo esc_html( $address ); ?>
+					</div>
+				<?php endif; ?>
+
+				<?php if ( '' !== $district ) : ?>
+					<div style="color: <?php echo esc_attr( $primary ); ?>; font-size: 13px; line-height: 1.4; font-weight: 700; margin-bottom: 14px;">
+						<?php echo esc_html( $district ); ?>
+					</div>
+				<?php endif; ?>
+
+				<?php if ( ! empty( $stats ) ) : ?>
+					<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px;">
+						<?php foreach ( $stats as $stat ) : ?>
+							<span style="display: inline-flex; align-items: center; border-radius: 999px; background: <?php echo esc_attr( $background ); ?>; color: #213532; padding: 7px 10px; font-size: 13px; font-weight: 700;">
+								<?php echo esc_html( $stat ); ?>
+							</span>
+						<?php endforeach; ?>
+					</div>
+				<?php endif; ?>
+
+				<a href="<?php echo esc_url( $permalink ); ?>" style="display: inline-flex; align-items: center; color: <?php echo esc_attr( $accent ); ?>; font-size: 14px; font-weight: 800; text-decoration: none;">
+					View property
+				</a>
+			</div>
+		</article>
+
+		<?php
+		return ob_get_clean();
+	}
+
+	private function get_site_style_tokens( array $blueprint ): array {
+		$style = $blueprint['site']['style'] ?? [];
+
+		return [
+			'primary'    => $this->sanitize_color_token( $style['primary'] ?? '', '#0f766e' ),
+			'accent'     => $this->sanitize_color_token( $style['accent'] ?? '', '#14b8a6' ),
+			'background' => $this->sanitize_color_token( $style['background'] ?? '', '#ecfeff' ),
+		];
+	}
+
+	private function sanitize_color_token( $value, string $fallback ): string {
+		if ( ! is_string( $value ) || '' === trim( $value ) ) {
+			return $fallback;
+		}
+
+		if ( function_exists( 'sanitize_hex_color' ) ) {
+			$sanitized = sanitize_hex_color( $value );
+
+			return $sanitized ?: $fallback;
+		}
+
+		return preg_match( '/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/', $value ) ? $value : $fallback;
+	}
+
+	private function get_property_meta_or_term( int $post_id, string $key ): string {
+		$value = get_post_meta( $post_id, $key, true );
+
+		if ( is_array( $value ) ) {
+			$value = reset( $value );
+		}
+
+		if ( '' !== $value && null !== $value ) {
+			return (string) $value;
+		}
+
+		$terms = wp_get_post_terms( $post_id, $key, [ 'fields' => 'names' ] );
+
+		if ( is_wp_error( $terms ) || empty( $terms ) ) {
+			return '';
+		}
+
+		return (string) $terms[0];
+	}
+
+	private function format_property_price( $value ): string {
+		if ( is_array( $value ) ) {
+			$value = reset( $value );
+		}
+
+		if ( '' === $value || [] === $value || null === $value ) {
+			return '';
+		}
+
+		if ( is_numeric( $value ) ) {
+			return '$' . number_format( (float) $value );
+		}
+
+		return (string) $value;
 	}
 
 	private function get_render_fields(
