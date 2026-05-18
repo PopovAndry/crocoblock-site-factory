@@ -11,9 +11,42 @@
     },
     "assets": {
       "property_images": {
-        "Apartment": "blueprints/assets/real-estate/apartment.jpg",
-        "House": "blueprints/assets/real-estate/house.jpg",
-        "Commercial": "blueprints/assets/real-estate/commercial.jpg"
+        "Apartment": [
+          "blueprints/assets/real-estate/apartment/apartment-1.png",
+          "blueprints/assets/real-estate/apartment/apartment-2.png",
+          "blueprints/assets/real-estate/apartment/apartment-3.png",
+          "blueprints/assets/real-estate/apartment/apartment-4.png",
+          "blueprints/assets/real-estate/apartment/apartment-5.png",
+          "blueprints/assets/real-estate/apartment/apartment-6.png",
+          "blueprints/assets/real-estate/apartment/apartment-7.png",
+          "blueprints/assets/real-estate/apartment/apartment-8.png",
+          "blueprints/assets/real-estate/apartment/apartment-9.png",
+          "blueprints/assets/real-estate/apartment/apartment-10.png"
+        ],
+        "House": [
+          "blueprints/assets/real-estate/house/house-1.png",
+          "blueprints/assets/real-estate/house/house-2.png",
+          "blueprints/assets/real-estate/house/house-3.png",
+          "blueprints/assets/real-estate/house/house-4.png",
+          "blueprints/assets/real-estate/house/house-5.png",
+          "blueprints/assets/real-estate/house/house-6.png",
+          "blueprints/assets/real-estate/house/house-7.png",
+          "blueprints/assets/real-estate/house/house-8.png",
+          "blueprints/assets/real-estate/house/house-9.png",
+          "blueprints/assets/real-estate/house/house-10.png"
+        ],
+        "Commercial": [
+          "blueprints/assets/real-estate/commercial/commercial-1.png",
+          "blueprints/assets/real-estate/commercial/commercial-2.png",
+          "blueprints/assets/real-estate/commercial/commercial-3.png",
+          "blueprints/assets/real-estate/commercial/commercial-4.png",
+          "blueprints/assets/real-estate/commercial/commercial-5.png",
+          "blueprints/assets/real-estate/commercial/commercial-6.png",
+          "blueprints/assets/real-estate/commercial/commercial-7.png",
+          "blueprints/assets/real-estate/commercial/commercial-8.png",
+          "blueprints/assets/real-estate/commercial/commercial-9.png",
+          "blueprints/assets/real-estate/commercial/commercial-10.png"
+        ]
       }
     }
   },

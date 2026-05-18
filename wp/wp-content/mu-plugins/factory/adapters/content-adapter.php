@@ -302,7 +302,7 @@ public function plan( array $blueprint ): array {
 	}
 
 	private function sync_featured_image( int $post_id, string $post_type, array $item, array $blueprint ): void {
-		$source = $this->resolve_featured_image_source( $item, $blueprint );
+		$source = $this->resolve_featured_image_source( $post_type, $item, $blueprint );
 
 		if ( '' === $source ) {
 			return;
@@ -400,7 +400,7 @@ public function plan( array $blueprint ): array {
 		);
 	}
 
-	private function resolve_featured_image_source( array $item, array $blueprint ): string {
+	private function resolve_featured_image_source( string $post_type, array $item, array $blueprint ): string {
 		if ( isset( $item['featured_image'] ) ) {
 			if ( is_string( $item['featured_image'] ) ) {
 				return trim( $item['featured_image'] );
@@ -432,9 +432,37 @@ public function plan( array $blueprint ): array {
 			return '';
 		}
 
-		$source = $mapping[ trim( $property_type ) ] ?? '';
+		$seed = $this->get_source_key( $post_type, $item );
 
-		return is_string( $source ) ? trim( $source ) : '';
+		return $this->resolve_asset_source_from_mapping( $mapping[ trim( $property_type ) ] ?? '', $seed );
+	}
+
+	private function resolve_asset_source_from_mapping( $mapping, string $seed ): string {
+		if ( is_string( $mapping ) ) {
+			return trim( $mapping );
+		}
+
+		if ( ! is_array( $mapping ) ) {
+			return '';
+		}
+
+		$sources = array_values(
+			array_filter(
+				$mapping,
+				function ( $source ) {
+					return is_string( $source ) && '' !== trim( $source );
+				}
+			)
+		);
+
+		if ( empty( $sources ) ) {
+			return '';
+		}
+
+		$hash  = sha1( $seed );
+		$index = hexdec( substr( $hash, 0, 8 ) ) % count( $sources );
+
+		return trim( $sources[ $index ] );
 	}
 
 	private function resolve_local_asset_path( string $source ): string {
