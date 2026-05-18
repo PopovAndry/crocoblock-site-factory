@@ -65,6 +65,13 @@
 		return Array.isArray( value ) ? value.length : 0;
 	}
 
+	function homeUrl( path ) {
+		const base = String( config.homeUrl || '/' ).replace( /\/$/, '' );
+		const cleanPath = String( path || '/' ).replace( /^\//, '' );
+
+		return base + '/' + cleanPath;
+	}
+
 	function summaryValue( summary, key ) {
 		return summary && typeof summary === 'object' ? Number( summary[ key ] || 0 ) : 0;
 	}
@@ -91,8 +98,45 @@
 		return state.latest && state.latest.run ? state.latest.run : {};
 	}
 
+	function executionCount( run ) {
+		const execution = run && run.execution ? run.execution : {};
+		return Number( execution.count ?? count( execution.items ) );
+	}
+
+	function validationCount( run ) {
+		const validation = run && run.validation ? run.validation : {};
+		return Number( validation.count ?? count( validation.checks ) );
+	}
+
+	function latestValidationOk() {
+		const run = runFromLatest();
+
+		if ( ! run || ! Object.keys( run ).length ) {
+			return false;
+		}
+
+		if ( statusValue( run.status ) === 'ok' ) {
+			return true;
+		}
+
+		const validationChecks = run.validation && Array.isArray( run.validation.checks )
+			? run.validation.checks
+			: [];
+		const resultsSummary = run.results && run.results.summary ? run.results.summary : {};
+		const hasValidationErrors = validationChecks.some( function ( check ) {
+			return statusValue( check.status ) === 'error';
+		} );
+		const resultErrors = summaryValue( resultsSummary, 'error' );
+
+		return ! hasValidationErrors && resultErrors === 0 && ( validationChecks.length > 0 || Object.keys( resultsSummary ).length > 0 );
+	}
+
 	function renderMetric( label, value ) {
 		return '<div class="factory-metric"><span>' + escapeHtml( label ) + '</span><strong>' + escapeHtml( value ) + '</strong></div>';
+	}
+
+	function renderDemoStatus( label, isReady ) {
+		return '<div class="factory-demo-status"><span>' + escapeHtml( label ) + '</span>' + badge( isReady ? 'ok' : 'warning' ) + '</div>';
 	}
 
 	function renderHeader() {
@@ -141,6 +185,74 @@
 						return '<li>' + badge( issue.status ) + '<span>' + escapeHtml( issue.message || '' ) + '</span></li>';
 					} ).join( '' ) + '</ul>'
 					: '<p class="factory-empty">No drift issues reported.</p>',
+			'</section>',
+		].join( '' );
+	}
+
+	function renderRealEstateDemo() {
+		const run = runFromLatest();
+		const plan = run.plan && run.plan.summary ? run.plan.summary : {};
+		const results = run.results && run.results.summary ? run.results.summary : {};
+		const siteGenerated = Boolean( run.file ) && executionCount( run ) > 0;
+		const doctorOk = statusValue( state.doctor && state.doctor.status ) === 'ok';
+		const validationOk = latestValidationOk();
+
+		return [
+			'<section class="factory-card factory-card-wide factory-demo-panel">',
+				'<div class="factory-demo-header">',
+					'<div>',
+						'<span class="factory-demo-kicker">Preset flow</span>',
+						'<h2>Real Estate Beta Demo</h2>',
+						'<p>Read-only proof that the generated Kyiv real estate site is applied, converged, and visible on the frontend.</p>',
+					'</div>',
+					'<div class="factory-demo-statuses">',
+						renderDemoStatus( 'Site generated', siteGenerated ),
+						renderDemoStatus( 'Validation OK', validationOk ),
+						renderDemoStatus( 'Doctor OK', doctorOk ),
+					'</div>',
+				'</div>',
+				'<div class="factory-demo-grid">',
+					'<div>',
+						'<h3>Preset Summary</h3>',
+						'<ul class="factory-demo-summary">',
+							'<li>30 Kyiv properties</li>',
+							'<li>Image pools by property type</li>',
+							'<li>Polished archive catalog</li>',
+							'<li>Polished single property pages</li>',
+							'<li>Manifest-backed validation proof</li>',
+						'</ul>',
+					'</div>',
+					'<div>',
+						'<h3>Current Convergence Proof</h3>',
+						'<div class="factory-metric-grid factory-demo-metrics">',
+							renderMetric( 'Create', summaryValue( plan, 'create' ) ),
+							renderMetric( 'Update', summaryValue( plan, 'update' ) ),
+							renderMetric( 'Skip', summaryValue( plan, 'skip' ) ),
+							renderMetric( 'Warning', summaryValue( plan, 'warning' ) ),
+							renderMetric( 'Error', summaryValue( plan, 'error' ) ),
+						'</div>',
+					'</div>',
+				'</div>',
+				'<div class="factory-demo-grid factory-demo-proof-grid">',
+					'<div>',
+						'<h3>Apply Proof</h3>',
+						'<dl class="factory-definition-list factory-definition-list-wide">',
+							'<dt>Run file</dt><dd>' + escapeHtml( run.file || '-' ) + '</dd>',
+							'<dt>Prompt</dt><dd>' + escapeHtml( run.prompt || '-' ) + '</dd>',
+							'<dt>Execution</dt><dd>' + escapeHtml( executionCount( run ) ) + ' items</dd>',
+							'<dt>Validation</dt><dd>' + escapeHtml( validationCount( run ) ) + ' checks</dd>',
+							'<dt>Results</dt><dd>' + escapeHtml( resultsSummaryText( results ) ) + '</dd>',
+						'</dl>',
+					'</div>',
+					'<div>',
+						'<h3>Open Frontend</h3>',
+						'<div class="factory-demo-links">',
+							'<a href="' + escapeHtml( homeUrl( '/properties/' ) ) + '" target="_blank" rel="noopener noreferrer">Open Properties Archive</a>',
+							'<a href="' + escapeHtml( homeUrl( '/property/turquoise-view-apartment-in-pechersk/' ) ) + '" target="_blank" rel="noopener noreferrer">Open sample Apartment</a>',
+							'<a href="' + escapeHtml( homeUrl( '/property/solomianskyi-business-office/' ) ) + '" target="_blank" rel="noopener noreferrer">Open sample Commercial</a>',
+						'</div>',
+					'</div>',
+				'</div>',
 			'</section>',
 		].join( '' );
 	}
@@ -290,6 +402,7 @@
 		root.innerHTML = [
 			renderHeader(),
 			renderErrors(),
+			renderRealEstateDemo(),
 			'<div class="factory-grid">',
 				renderSystemStatus(),
 				renderLatestRun(),

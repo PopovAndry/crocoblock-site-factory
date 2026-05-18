@@ -48,6 +48,7 @@ function factory_enqueue_admin_dashboard_assets( string $hook ): void {
 		[
 			'restBase'  => esc_url_raw( rest_url( 'factory/v1' ) ),
 			'restNonce' => wp_create_nonce( 'wp_rest' ),
+			'homeUrl'   => esc_url_raw( home_url( '/' ) ),
 			'endpoints' => [
 				'doctor'  => '/doctor',
 				'runs'    => '/runs?limit=20',
