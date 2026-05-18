@@ -7,6 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Factory_Content_Adapter {
 
 	private array $execution_results = [];
+	private array $asset_pool_counters = [];
 
 	public function register( array $blueprint ): void {
 		// Content is handled during apply/validate only.
@@ -14,6 +15,7 @@ class Factory_Content_Adapter {
 
 	public function apply( array $blueprint ): void {
 		$this->execution_results = [];
+		$this->asset_pool_counters = [];
 
 		foreach ( $blueprint['content'] ?? [] as $post_type => $items ) {
 			foreach ( $items as $item ) {
@@ -432,12 +434,13 @@ public function plan( array $blueprint ): array {
 			return '';
 		}
 
-		$seed = $this->get_source_key( $post_type, $item );
+		$property_type = trim( $property_type );
+		$pool_key      = "{$post_type}:{$property_type}";
 
-		return $this->resolve_asset_source_from_mapping( $mapping[ trim( $property_type ) ] ?? '', $seed );
+		return $this->resolve_asset_source_from_mapping( $mapping[ $property_type ] ?? '', $pool_key );
 	}
 
-	private function resolve_asset_source_from_mapping( $mapping, string $seed ): string {
+	private function resolve_asset_source_from_mapping( $mapping, string $pool_key ): string {
 		if ( is_string( $mapping ) ) {
 			return trim( $mapping );
 		}
@@ -459,8 +462,10 @@ public function plan( array $blueprint ): array {
 			return '';
 		}
 
-		$hash  = sha1( $seed );
-		$index = hexdec( substr( $hash, 0, 8 ) ) % count( $sources );
+		$counter = $this->asset_pool_counters[ $pool_key ] ?? 0;
+		$index   = $counter % count( $sources );
+
+		$this->asset_pool_counters[ $pool_key ] = $counter + 1;
 
 		return trim( $sources[ $index ] );
 	}
