@@ -14,12 +14,28 @@ class Factory_Render_Adapter {
 
 	public function apply( array $blueprint ): void {
 		$this->execution_results = [];
+		$synced_front_pages      = [];
 
 		foreach ( $blueprint['listings'] ?? [] as $listing ) {
 			$result = $this->upsert_listing_page( $listing );
 
 			if ( is_array( $result ) ) {
 				$this->execution_results[] = $result;
+			}
+
+			$post_type   = $listing['post_type'] ?? '';
+			$page_config = $this->get_archive_page_config( $post_type );
+			$page_slug   = $page_config['slug'] ?? '';
+
+			if ( ! $page_slug || isset( $synced_front_pages[ $page_slug ] ) ) {
+				continue;
+			}
+
+			$front_page_result = $this->sync_front_page( $page_config );
+
+			if ( is_array( $front_page_result ) ) {
+				$this->execution_results[] = $front_page_result;
+				$synced_front_pages[ $page_slug ] = true;
 			}
 		}
 	}
@@ -66,6 +82,12 @@ class Factory_Render_Adapter {
 					'message' => "Create render page: {$page_slug}",
 				];
 
+				$front_page_plan = $this->get_front_page_plan_item( $page_config );
+
+				if ( is_array( $front_page_plan ) ) {
+					$plan[] = $front_page_plan;
+				}
+
 				continue;
 			}
 
@@ -86,6 +108,12 @@ class Factory_Render_Adapter {
 					'message' => "Render page up-to-date: {$page_slug}",
 				];
 
+				$front_page_plan = $this->get_front_page_plan_item( $page_config );
+
+				if ( is_array( $front_page_plan ) ) {
+					$plan[] = $front_page_plan;
+				}
+
 				continue;
 			}
 
@@ -96,6 +124,12 @@ class Factory_Render_Adapter {
 				'message' => "Update render page: {$page_slug}",
 				'diff'    => $diff,
 			];
+
+			$front_page_plan = $this->get_front_page_plan_item( $page_config );
+
+			if ( is_array( $front_page_plan ) ) {
+				$plan[] = $front_page_plan;
+			}
 		}
 
 		return $plan;
@@ -154,6 +188,12 @@ class Factory_Render_Adapter {
 			'status'  => 'ok',
 			'message' => "Render page up-to-date: {$title}",
 		];
+
+		$front_page_check = $this->validate_front_page( $page, $existing );
+
+		if ( is_array( $front_page_check ) ) {
+			$results[] = $front_page_check;
+		}
 
 		return $results;
 	}
@@ -257,16 +297,112 @@ class Factory_Render_Adapter {
 		);
 	}
 
+	private function sync_front_page( array $page_config ): ?array {
+		if ( ! $this->should_use_archive_as_front_page( $page_config ) ) {
+			return null;
+		}
+
+		$page_slug = $page_config['slug'] ?? '';
+
+		if ( ! $page_slug ) {
+			return null;
+		}
+
+		$page = get_page_by_path( $page_slug );
+
+		if ( ! $page ) {
+			return $this->execution_item(
+				'error',
+				'update',
+				$page_slug,
+				"Homepage archive page missing: {$page_slug}",
+				'homepage'
+			);
+		}
+
+		if ( $this->is_front_page( $page ) ) {
+			return $this->execution_item(
+				'ok',
+				'skip',
+				$page_slug,
+				"Homepage already set to archive page: {$page_slug}",
+				'homepage'
+			);
+		}
+
+		update_option( 'show_on_front', 'page' );
+		update_option( 'page_on_front', $page->ID );
+
+		return $this->execution_item(
+			'ok',
+			'update',
+			$page_slug,
+			"Homepage set to archive page: {$page_slug}",
+			'homepage'
+		);
+	}
+
+	private function get_front_page_plan_item( array $page_config ): ?array {
+		if ( ! $this->should_use_archive_as_front_page( $page_config ) ) {
+			return null;
+		}
+
+		$page_slug = $page_config['slug'] ?? '';
+
+		if ( ! $page_slug ) {
+			return null;
+		}
+
+		$page       = get_page_by_path( $page_slug );
+		$is_current = $page && $this->is_front_page( $page );
+
+		return [
+			'action'  => $is_current ? 'skip' : 'update',
+			'type'    => 'homepage',
+			'entity'  => $page_slug,
+			'message' => $is_current
+				? "Homepage already set to archive page: {$page_slug}"
+				: "Set homepage to archive page: {$page_slug}",
+			'diff'    => [],
+		];
+	}
+
+	private function validate_front_page( array $page_config, WP_Post $page ): ?array {
+		if ( ! $this->should_use_archive_as_front_page( $page_config ) ) {
+			return null;
+		}
+
+		$page_slug = $page_config['slug'] ?? '';
+		$is_valid  = $this->is_front_page( $page );
+
+		return [
+			'status'  => $is_valid ? 'ok' : 'error',
+			'message' => $is_valid
+				? "Homepage set to archive page: {$page_slug}"
+				: "Homepage not set to archive page: {$page_slug}",
+		];
+	}
+
+	private function should_use_archive_as_front_page( array $page_config ): bool {
+		return true === ( $page_config['front_page'] ?? false );
+	}
+
+	private function is_front_page( WP_Post $page ): bool {
+		return 'page' === get_option( 'show_on_front' )
+			&& (int) get_option( 'page_on_front' ) === (int) $page->ID;
+	}
+
 	private function execution_item(
 		string $status,
 		string $action,
 		string $entity,
-		string $message
+		string $message,
+		string $type = 'render'
 	): array {
 		return [
 			'status'  => $status,
 			'action'  => $action,
-			'type'    => 'render',
+			'type'    => $type,
 			'entity'  => $entity,
 			'message' => $message,
 			'details' => [],
