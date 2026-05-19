@@ -62,11 +62,102 @@
     }
   ],
   "pages": {
+    "home": {
+      "slug": "home",
+      "title": "Kyiv Turquoise Realty",
+      "front_page": true,
+      "sections": [
+        {
+          "type": "hero",
+          "title": "Kyiv Turquoise Realty",
+          "subtitle": "Find apartments, houses, and commercial spaces in Kyiv",
+          "cta_label": "Browse properties",
+          "cta_url": "/properties/"
+        },
+        {
+          "type": "listing",
+          "title": "Latest Properties",
+          "query": "latest-properties",
+          "listing": "property-card"
+        },
+        {
+          "type": "listing",
+          "title": "For Sale",
+          "query": "sale-properties",
+          "listing": "property-card"
+        },
+        {
+          "type": "listing",
+          "title": "For Rent",
+          "query": "rent-properties",
+          "listing": "property-card"
+        },
+        {
+          "type": "listing",
+          "title": "Commercial Spaces",
+          "query": "commercial-properties",
+          "listing": "property-card"
+        },
+        {
+          "type": "cta",
+          "title": "Ready to find your Kyiv property?",
+          "text": "Talk to Kyiv Turquoise Realty about sale and rent opportunities.",
+          "cta_label": "Contact agency",
+          "cta_url": "/contact/"
+        }
+      ]
+    },
     "archive": {
       "post_type": "property",
       "slug": "properties",
-      "title": "Properties",
-      "front_page": true
+      "title": "Properties"
+    },
+    "contact": {
+      "slug": "contact",
+      "title": "Contact Kyiv Turquoise Realty",
+      "text": "Schedule a viewing or request more details about Kyiv properties.",
+      "phone": "+380 44 000 0000",
+      "email": "hello@example.com",
+      "cta_label": "Browse properties",
+      "cta_url": "/properties/"
+    },
+    "queries": {
+      "latest-properties": {
+        "post_type": "property",
+        "posts_per_page": 6,
+        "orderby": "date",
+        "order": "DESC"
+      },
+      "sale-properties": {
+        "post_type": "property",
+        "posts_per_page": 6,
+        "taxonomies": {
+          "purpose": ["Sale"]
+        }
+      },
+      "rent-properties": {
+        "post_type": "property",
+        "posts_per_page": 6,
+        "taxonomies": {
+          "purpose": ["Rent"]
+        }
+      },
+      "commercial-properties": {
+        "post_type": "property",
+        "posts_per_page": 6,
+        "taxonomies": {
+          "property_type": ["Commercial"]
+        }
+      }
+    },
+    "navigation": {
+      "menu_name": "Factory Main Menu",
+      "theme_location": "main",
+      "items": [
+        { "label": "Home", "page": "home" },
+        { "label": "Properties", "page": "archive" },
+        { "label": "Contact", "page": "contact" }
+      ]
     }
   },
   "cpt": [

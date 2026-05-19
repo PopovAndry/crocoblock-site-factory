@@ -14,7 +14,6 @@ class Factory_Render_Adapter {
 
 	public function apply( array $blueprint ): void {
 		$this->execution_results = [];
-		$synced_front_pages      = [];
 
 		foreach ( $blueprint['listings'] ?? [] as $listing ) {
 			$result = $this->upsert_listing_page( $listing );
@@ -22,21 +21,26 @@ class Factory_Render_Adapter {
 			if ( is_array( $result ) ) {
 				$this->execution_results[] = $result;
 			}
+		}
 
-			$post_type   = $listing['post_type'] ?? '';
-			$page_config = $this->get_archive_page_config( $post_type );
-			$page_slug   = $page_config['slug'] ?? '';
+		foreach ( [ 'home', 'contact' ] as $page_key ) {
+			$result = $this->upsert_configured_page( $blueprint, $page_key );
 
-			if ( ! $page_slug || isset( $synced_front_pages[ $page_slug ] ) ) {
-				continue;
+			if ( is_array( $result ) ) {
+				$this->execution_results[] = $result;
 			}
+		}
 
-			$front_page_result = $this->sync_front_page( $page_config );
+		$front_page_result = $this->sync_front_page( $blueprint );
 
-			if ( is_array( $front_page_result ) ) {
-				$this->execution_results[] = $front_page_result;
-				$synced_front_pages[ $page_slug ] = true;
-			}
+		if ( is_array( $front_page_result ) ) {
+			$this->execution_results[] = $front_page_result;
+		}
+
+		$navigation_result = $this->sync_navigation_menu( $blueprint );
+
+		if ( is_array( $navigation_result ) ) {
+			$this->execution_results[] = $navigation_result;
 		}
 	}
 
@@ -82,12 +86,6 @@ class Factory_Render_Adapter {
 					'message' => "Create render page: {$page_slug}",
 				];
 
-				$front_page_plan = $this->get_front_page_plan_item( $page_config );
-
-				if ( is_array( $front_page_plan ) ) {
-					$plan[] = $front_page_plan;
-				}
-
 				continue;
 			}
 
@@ -108,12 +106,6 @@ class Factory_Render_Adapter {
 					'message' => "Render page up-to-date: {$page_slug}",
 				];
 
-				$front_page_plan = $this->get_front_page_plan_item( $page_config );
-
-				if ( is_array( $front_page_plan ) ) {
-					$plan[] = $front_page_plan;
-				}
-
 				continue;
 			}
 
@@ -124,12 +116,26 @@ class Factory_Render_Adapter {
 				'message' => "Update render page: {$page_slug}",
 				'diff'    => $diff,
 			];
+		}
 
-			$front_page_plan = $this->get_front_page_plan_item( $page_config );
+		foreach ( [ 'home', 'contact' ] as $page_key ) {
+			$page_plan = $this->get_configured_page_plan_item( $blueprint, $page_key );
 
-			if ( is_array( $front_page_plan ) ) {
-				$plan[] = $front_page_plan;
+			if ( is_array( $page_plan ) ) {
+				$plan[] = $page_plan;
 			}
+		}
+
+		$front_page_plan = $this->get_front_page_plan_item( $blueprint );
+
+		if ( is_array( $front_page_plan ) ) {
+			$plan[] = $front_page_plan;
+		}
+
+		$navigation_plan = $this->get_navigation_plan_item( $blueprint );
+
+		if ( is_array( $navigation_plan ) ) {
+			$plan[] = $navigation_plan;
 		}
 
 		return $plan;
@@ -140,59 +146,50 @@ class Factory_Render_Adapter {
 
 		$page = $blueprint['pages']['archive'] ?? null;
 
-		if ( ! $page ) {
-			return $results;
+		if ( $page ) {
+			$slug  = $page['slug'] ?? '';
+			$title = $page['title'] ?? $slug;
+			$content = sprintf(
+				'[factory_listing slug="%s"]',
+				esc_attr( $this->get_listing_slug_for_post_type( $blueprint, $page['post_type'] ?? '' ) )
+			);
+
+			$results[] = $this->validate_page_state(
+				$slug,
+				$title,
+				$content,
+				'Render page'
+			);
 		}
 
-		$slug  = $page['slug'] ?? '';
-		$title = $page['title'] ?? $slug;
+		foreach ( [ 'home', 'contact' ] as $page_key ) {
+			$page_check = $this->validate_configured_page( $blueprint, $page_key );
 
-		$existing = get_page_by_path( $slug );
-
-		if ( ! $existing ) {
-			$results[] = [
-				'status'  => 'error',
-				'message' => "Render page missing: {$title}",
-			];
-
-			return $results;
+			if ( is_array( $page_check ) ) {
+				$results[] = $page_check;
+			}
 		}
 
-		$target_content = sprintf(
-			'[factory_listing slug="%s"]',
-			esc_attr( $this->get_listing_slug_for_post_type( $blueprint, $page['post_type'] ?? '' ) )
-		);
-
-		$current_state = [
-			'post_title'   => $existing->post_title,
-			'post_content' => $existing->post_content,
-		];
-
-		$target_state = [
-			'post_title'   => $title,
-			'post_content' => $target_content,
-		];
-
-		$diff = factory_diff_arrays( $current_state, $target_state );
-
-		if ( ! empty( $diff ) ) {
-			$results[] = [
-				'status'  => 'error',
-				'message' => "Render page out of sync: {$title}",
-			];
-
-			return $results;
+		foreach ( $this->validate_home_queries( $blueprint ) as $query_check ) {
+			$results[] = $query_check;
 		}
 
-		$results[] = [
-			'status'  => 'ok',
-			'message' => "Render page up-to-date: {$title}",
-		];
-
-		$front_page_check = $this->validate_front_page( $page, $existing );
+		$front_page_check = $this->validate_front_page( $blueprint );
 
 		if ( is_array( $front_page_check ) ) {
 			$results[] = $front_page_check;
+		}
+
+		$properties_check = $this->validate_archive_not_front_page( $blueprint );
+
+		if ( is_array( $properties_check ) ) {
+			$results[] = $properties_check;
+		}
+
+		$navigation_check = $this->validate_navigation_menu( $blueprint );
+
+		if ( is_array( $navigation_check ) ) {
+			$results[] = $navigation_check;
 		}
 
 		return $results;
@@ -297,12 +294,131 @@ class Factory_Render_Adapter {
 		);
 	}
 
-	private function sync_front_page( array $page_config ): ?array {
-		if ( ! $this->should_use_archive_as_front_page( $page_config ) ) {
+	private function upsert_configured_page( array $blueprint, string $page_key ): ?array {
+		$page = $this->get_configured_page( $blueprint, $page_key );
+
+		if ( empty( $page ) ) {
 			return null;
 		}
 
-		$page_slug = $page_config['slug'] ?? '';
+		$page_slug  = $page['slug'] ?? '';
+		$page_title = $page['title'] ?? ucwords( str_replace( '-', ' ', $page_slug ) );
+		$content    = $this->get_configured_page_content( $blueprint, $page_key );
+
+		return $this->upsert_page(
+			$page_slug,
+			$page_title,
+			$content,
+			'page',
+			$this->humanize_key( $page_key ) . ' page'
+		);
+	}
+
+	private function upsert_page(
+		string $page_slug,
+		string $page_title,
+		string $content,
+		string $item_type,
+		string $label
+	): ?array {
+		if ( ! $page_slug || ! $page_title ) {
+			return null;
+		}
+
+		$existing = get_page_by_path( $page_slug );
+
+		$target_state = [
+			'post_title'   => $page_title,
+			'post_name'    => $page_slug,
+			'post_status'  => 'publish',
+			'post_content' => $content,
+		];
+
+		if ( $existing ) {
+			$current_state = [
+				'post_title'   => $existing->post_title,
+				'post_name'    => $existing->post_name,
+				'post_status'  => $existing->post_status,
+				'post_content' => $existing->post_content,
+			];
+
+			$diff = factory_diff_arrays( $current_state, $target_state );
+
+			if ( empty( $diff ) ) {
+				$this->log( "{$label} up-to-date: {$page_slug}" );
+
+				return $this->execution_item(
+					'ok',
+					'skip',
+					$page_slug,
+					"{$label} up-to-date: {$page_slug}",
+					$item_type
+				);
+			}
+
+			$post_data              = $target_state;
+			$post_data['ID']        = $existing->ID;
+			$post_data['post_type'] = 'page';
+
+			$post_id = wp_update_post( $post_data );
+			$this->log( "{$label} updated: {$page_slug}" );
+
+			if ( is_wp_error( $post_id ) || ! $post_id ) {
+				return $this->execution_item(
+					'error',
+					'update',
+					$page_slug,
+					"{$label} update failed: {$page_slug}",
+					$item_type
+				);
+			}
+
+			return $this->execution_item(
+				'ok',
+				'update',
+				$page_slug,
+				"{$label} updated: {$page_slug}",
+				$item_type
+			);
+		}
+
+		$post_id = wp_insert_post( [
+			'post_type'    => 'page',
+			'post_title'   => $page_title,
+			'post_name'    => $page_slug,
+			'post_status'  => 'publish',
+			'post_content' => $content,
+		] );
+
+		$this->log( "{$label} created: {$page_slug}" );
+
+		if ( is_wp_error( $post_id ) || ! $post_id ) {
+			return $this->execution_item(
+				'error',
+				'create',
+				$page_slug,
+				"{$label} create failed: {$page_slug}",
+				$item_type
+			);
+		}
+
+		return $this->execution_item(
+			'ok',
+			'create',
+			$page_slug,
+			"{$label} created: {$page_slug}",
+			$item_type
+		);
+	}
+
+	private function sync_front_page( array $blueprint ): ?array {
+		$home = $this->get_configured_page( $blueprint, 'home' );
+
+		if ( empty( $home ) || true !== ( $home['front_page'] ?? false ) ) {
+			return null;
+		}
+
+		$page_slug = $home['slug'] ?? '';
 
 		if ( ! $page_slug ) {
 			return null;
@@ -315,7 +431,7 @@ class Factory_Render_Adapter {
 				'error',
 				'update',
 				$page_slug,
-				"Homepage archive page missing: {$page_slug}",
+				"Homepage page missing: {$page_slug}",
 				'homepage'
 			);
 		}
@@ -325,7 +441,7 @@ class Factory_Render_Adapter {
 				'ok',
 				'skip',
 				$page_slug,
-				"Homepage already set to archive page: {$page_slug}",
+				"Homepage already set to Home page: {$page_slug}",
 				'homepage'
 			);
 		}
@@ -337,17 +453,89 @@ class Factory_Render_Adapter {
 			'ok',
 			'update',
 			$page_slug,
-			"Homepage set to archive page: {$page_slug}",
+			"Homepage set to Home page: {$page_slug}",
 			'homepage'
 		);
 	}
 
-	private function get_front_page_plan_item( array $page_config ): ?array {
-		if ( ! $this->should_use_archive_as_front_page( $page_config ) ) {
+	private function get_configured_page_plan_item( array $blueprint, string $page_key ): ?array {
+		$page = $this->get_configured_page( $blueprint, $page_key );
+
+		if ( empty( $page ) ) {
 			return null;
 		}
 
-		$page_slug = $page_config['slug'] ?? '';
+		$page_slug  = $page['slug'] ?? '';
+		$page_title = $page['title'] ?? ucwords( str_replace( '-', ' ', $page_slug ) );
+		$content    = $this->get_configured_page_content( $blueprint, $page_key );
+
+		return $this->get_page_plan_item(
+			$page_slug,
+			$page_title,
+			$content,
+			'page',
+			$this->humanize_key( $page_key ) . ' page'
+		);
+	}
+
+	private function get_page_plan_item(
+		string $page_slug,
+		string $page_title,
+		string $content,
+		string $item_type,
+		string $label
+	): ?array {
+		if ( ! $page_slug || ! $page_title ) {
+			return null;
+		}
+
+		$target_state = [
+			'post_title'   => $page_title,
+			'post_name'    => $page_slug,
+			'post_status'  => 'publish',
+			'post_content' => $content,
+		];
+
+		$existing = get_page_by_path( $page_slug );
+
+		if ( ! $existing ) {
+			return [
+				'action'  => 'create',
+				'type'    => $item_type,
+				'entity'  => $page_slug,
+				'message' => "Create {$label}: {$page_slug}",
+				'diff'    => [],
+			];
+		}
+
+		$current_state = [
+			'post_title'   => $existing->post_title,
+			'post_name'    => $existing->post_name,
+			'post_status'  => $existing->post_status,
+			'post_content' => $existing->post_content,
+		];
+
+		$diff = factory_diff_arrays( $current_state, $target_state );
+
+		return [
+			'action'  => empty( $diff ) ? 'skip' : 'update',
+			'type'    => $item_type,
+			'entity'  => $page_slug,
+			'message' => empty( $diff )
+				? "{$label} up-to-date: {$page_slug}"
+				: "Update {$label}: {$page_slug}",
+			'diff'    => $diff,
+		];
+	}
+
+	private function get_front_page_plan_item( array $blueprint ): ?array {
+		$home = $this->get_configured_page( $blueprint, 'home' );
+
+		if ( empty( $home ) || true !== ( $home['front_page'] ?? false ) ) {
+			return null;
+		}
+
+		$page_slug = $home['slug'] ?? '';
 
 		if ( ! $page_slug ) {
 			return null;
@@ -361,35 +549,502 @@ class Factory_Render_Adapter {
 			'type'    => 'homepage',
 			'entity'  => $page_slug,
 			'message' => $is_current
-				? "Homepage already set to archive page: {$page_slug}"
-				: "Set homepage to archive page: {$page_slug}",
+				? "Homepage already set to Home page: {$page_slug}"
+				: "Set homepage to Home page: {$page_slug}",
 			'diff'    => [],
 		];
 	}
 
-	private function validate_front_page( array $page_config, WP_Post $page ): ?array {
-		if ( ! $this->should_use_archive_as_front_page( $page_config ) ) {
+	private function validate_configured_page( array $blueprint, string $page_key ): ?array {
+		$page = $this->get_configured_page( $blueprint, $page_key );
+
+		if ( empty( $page ) ) {
 			return null;
 		}
 
-		$page_slug = $page_config['slug'] ?? '';
-		$is_valid  = $this->is_front_page( $page );
+		$page_slug  = $page['slug'] ?? '';
+		$page_title = $page['title'] ?? $page_slug;
+		$content    = $this->get_configured_page_content( $blueprint, $page_key );
+
+		return $this->validate_page_state(
+			$page_slug,
+			$page_title,
+			$content,
+			$this->humanize_key( $page_key ) . ' page'
+		);
+	}
+
+	private function validate_page_state(
+		string $page_slug,
+		string $page_title,
+		string $content,
+		string $label
+	): array {
+		$existing = get_page_by_path( $page_slug );
+
+		if ( ! $existing ) {
+			return [
+				'status'  => 'error',
+				'message' => "{$label} missing: {$page_title}",
+			];
+		}
+
+		$current_state = [
+			'post_title'   => $existing->post_title,
+			'post_content' => $existing->post_content,
+		];
+
+		$target_state = [
+			'post_title'   => $page_title,
+			'post_content' => $content,
+		];
+
+		$diff = factory_diff_arrays( $current_state, $target_state );
+
+		if ( ! empty( $diff ) ) {
+			return [
+				'status'  => 'error',
+				'message' => "{$label} out of sync: {$page_title}",
+			];
+		}
+
+		return [
+			'status'  => 'ok',
+			'message' => "{$label} up-to-date: {$page_title}",
+		];
+	}
+
+	private function validate_front_page( array $blueprint ): ?array {
+		$home = $this->get_configured_page( $blueprint, 'home' );
+
+		if ( empty( $home ) || true !== ( $home['front_page'] ?? false ) ) {
+			return null;
+		}
+
+		$page_slug = $home['slug'] ?? '';
+		$page      = $page_slug ? get_page_by_path( $page_slug ) : null;
+
+		if ( ! $page ) {
+			return [
+				'status'  => 'error',
+				'message' => "Homepage page missing: {$page_slug}",
+			];
+		}
+
+		$is_valid = $this->is_front_page( $page );
 
 		return [
 			'status'  => $is_valid ? 'ok' : 'error',
 			'message' => $is_valid
-				? "Homepage set to archive page: {$page_slug}"
-				: "Homepage not set to archive page: {$page_slug}",
+				? "Homepage set to Home page: {$page_slug}"
+				: "Homepage not set to Home page: {$page_slug}",
 		];
 	}
 
-	private function should_use_archive_as_front_page( array $page_config ): bool {
-		return true === ( $page_config['front_page'] ?? false );
+	private function validate_archive_not_front_page( array $blueprint ): ?array {
+		$archive = $blueprint['pages']['archive'] ?? [];
+
+		if ( ! is_array( $archive ) ) {
+			return null;
+		}
+
+		$page_slug = $archive['slug'] ?? '';
+		$page      = $page_slug ? get_page_by_path( $page_slug ) : null;
+
+		if ( ! $page ) {
+			return null;
+		}
+
+		$is_front_page = $this->is_front_page( $page );
+
+		return [
+			'status'  => $is_front_page ? 'error' : 'ok',
+			'message' => $is_front_page
+				? "Properties archive is incorrectly set as homepage: {$page_slug}"
+				: "Properties archive remains available at: {$page_slug}",
+		];
 	}
 
 	private function is_front_page( WP_Post $page ): bool {
 		return 'page' === get_option( 'show_on_front' )
 			&& (int) get_option( 'page_on_front' ) === (int) $page->ID;
+	}
+
+	private function sync_navigation_menu( array $blueprint ): ?array {
+		$config = $this->get_navigation_config( $blueprint );
+
+		if ( empty( $config ) ) {
+			return null;
+		}
+
+		$menu_name     = $config['menu_name'] ?? '';
+		$desired_items = $this->get_navigation_desired_items( $blueprint, $config );
+
+		if ( ! $menu_name || empty( $desired_items ) ) {
+			return null;
+		}
+
+		foreach ( $desired_items as $item ) {
+			if ( empty( $item['page_id'] ) ) {
+				return $this->execution_item(
+					'error',
+					'update',
+					$menu_name,
+					"Navigation page missing: {$item['label']}",
+					'menu'
+				);
+			}
+		}
+
+		$menu    = wp_get_nav_menu_object( $menu_name );
+		$created = false;
+
+		if ( ! $menu ) {
+			$menu_id = wp_create_nav_menu( $menu_name );
+
+			if ( is_wp_error( $menu_id ) || ! $menu_id ) {
+				return $this->execution_item(
+					'error',
+					'create',
+					$menu_name,
+					"Navigation menu create failed: {$menu_name}",
+					'menu'
+				);
+			}
+
+			$menu    = wp_get_nav_menu_object( $menu_id );
+			$created = true;
+		}
+
+		$menu_id     = (int) $menu->term_id;
+		$location    = $this->get_navigation_location( $config );
+		$is_current  = $this->is_navigation_menu_current( $menu_id, $desired_items );
+		$is_assigned = $location ? $this->is_navigation_location_assigned( $location, $menu_id ) : false;
+
+		if ( $is_current && ( $is_assigned || ! $location ) ) {
+			$status = $location ? 'ok' : 'warning';
+			$message = $location
+				? "Navigation menu up-to-date: {$menu_name}"
+				: "Navigation menu has no theme location available: {$menu_name}";
+
+			return $this->execution_item(
+				$status,
+				'skip',
+				$menu_name,
+				$message,
+				'menu'
+			);
+		}
+
+		if ( ! $is_current ) {
+			$existing_items = wp_get_nav_menu_items( $menu_id );
+
+			if ( is_array( $existing_items ) ) {
+				foreach ( $existing_items as $item ) {
+					wp_delete_post( (int) $item->ID, true );
+				}
+			}
+
+			foreach ( $desired_items as $index => $item ) {
+				$item_id = wp_update_nav_menu_item(
+					$menu_id,
+					0,
+					[
+						'menu-item-title'     => $item['label'],
+						'menu-item-object-id' => $item['page_id'],
+						'menu-item-object'    => 'page',
+						'menu-item-type'      => 'post_type',
+						'menu-item-status'    => 'publish',
+						'menu-item-position'  => $index + 1,
+					]
+				);
+
+				if ( is_wp_error( $item_id ) || ! $item_id ) {
+					return $this->execution_item(
+						'error',
+						'update',
+						$menu_name,
+						"Navigation menu item update failed: {$item['label']}",
+						'menu'
+					);
+				}
+			}
+		}
+
+		if ( $location && ! $is_assigned ) {
+			$locations              = get_theme_mod( 'nav_menu_locations', [] );
+			$locations[ $location ] = $menu_id;
+			set_theme_mod( 'nav_menu_locations', $locations );
+		}
+
+		if ( ! $location ) {
+			return $this->execution_item(
+				'warning',
+				$created ? 'create' : 'update',
+				$menu_name,
+				"Navigation menu updated but no theme location is available: {$menu_name}",
+				'menu'
+			);
+		}
+
+		return $this->execution_item(
+			'ok',
+			$created ? 'create' : 'update',
+			$menu_name,
+			$created
+				? "Navigation menu created: {$menu_name}"
+				: "Navigation menu updated: {$menu_name}",
+			'menu'
+		);
+	}
+
+	private function get_navigation_plan_item( array $blueprint ): ?array {
+		$config = $this->get_navigation_config( $blueprint );
+
+		if ( empty( $config ) ) {
+			return null;
+		}
+
+		$menu_name     = $config['menu_name'] ?? '';
+		$desired_items = $this->get_navigation_desired_items( $blueprint, $config );
+
+		if ( ! $menu_name || empty( $desired_items ) ) {
+			return null;
+		}
+
+		$menu     = wp_get_nav_menu_object( $menu_name );
+		$location = $this->get_navigation_location( $config );
+
+		if ( ! $location ) {
+			return [
+				'action'  => 'warning',
+				'type'    => 'menu',
+				'entity'  => $menu_name,
+				'message' => "Navigation menu has no theme location available: {$menu_name}",
+				'diff'    => [],
+			];
+		}
+
+		if ( ! $menu ) {
+			return [
+				'action'  => 'create',
+				'type'    => 'menu',
+				'entity'  => $menu_name,
+				'message' => "Create navigation menu: {$menu_name}",
+				'diff'    => [],
+			];
+		}
+
+		$menu_id    = (int) $menu->term_id;
+		$is_current = $this->is_navigation_menu_current( $menu_id, $desired_items )
+			&& $this->is_navigation_location_assigned( $location, $menu_id );
+
+		return [
+			'action'  => $is_current ? 'skip' : 'update',
+			'type'    => 'menu',
+			'entity'  => $menu_name,
+			'message' => $is_current
+				? "Navigation menu up-to-date: {$menu_name}"
+				: "Update navigation menu: {$menu_name}",
+			'diff'    => [],
+		];
+	}
+
+	private function validate_navigation_menu( array $blueprint ): ?array {
+		$config = $this->get_navigation_config( $blueprint );
+
+		if ( empty( $config ) ) {
+			return null;
+		}
+
+		$menu_name     = $config['menu_name'] ?? '';
+		$desired_items = $this->get_navigation_desired_items( $blueprint, $config );
+
+		if ( ! $menu_name || empty( $desired_items ) ) {
+			return null;
+		}
+
+		foreach ( $desired_items as $item ) {
+			if ( empty( $item['page_id'] ) ) {
+				return [
+					'status'  => 'error',
+					'message' => "Navigation page missing: {$item['label']}",
+				];
+			}
+		}
+
+		$menu = wp_get_nav_menu_object( $menu_name );
+
+		if ( ! $menu ) {
+			return [
+				'status'  => 'error',
+				'message' => "Navigation menu missing: {$menu_name}",
+			];
+		}
+
+		$menu_id = (int) $menu->term_id;
+
+		if ( ! $this->is_navigation_menu_current( $menu_id, $desired_items ) ) {
+			return [
+				'status'  => 'error',
+				'message' => "Navigation menu out of sync: {$menu_name}",
+			];
+		}
+
+		$location = $this->get_navigation_location( $config );
+
+		if ( ! $location ) {
+			return [
+				'status'  => 'warning',
+				'message' => "Navigation menu has no theme location available: {$menu_name}",
+			];
+		}
+
+		if ( ! $this->is_navigation_location_assigned( $location, $menu_id ) ) {
+			return [
+				'status'  => 'error',
+				'message' => "Navigation menu not assigned to theme location: {$location}",
+			];
+		}
+
+		return [
+			'status'  => 'ok',
+			'message' => "Navigation menu ready: {$menu_name}",
+		];
+	}
+
+	private function get_navigation_config( array $blueprint ): array {
+		$config = $blueprint['pages']['navigation'] ?? [];
+
+		return is_array( $config ) ? $config : [];
+	}
+
+	private function get_navigation_desired_items( array $blueprint, array $config ): array {
+		$items = [];
+
+		foreach ( $config['items'] ?? [] as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+
+			$page_key    = $item['page'] ?? '';
+			$page_config = $this->get_configured_page( $blueprint, $page_key );
+			$page_slug   = $page_config['slug'] ?? '';
+			$page        = $page_slug ? get_page_by_path( $page_slug ) : null;
+
+			$items[] = [
+				'label'   => $item['label'] ?? ( $page_config['title'] ?? $this->humanize_key( $page_key ) ),
+				'page'    => $page_key,
+				'slug'    => $page_slug,
+				'page_id' => $page ? (int) $page->ID : 0,
+			];
+		}
+
+		return $items;
+	}
+
+	private function is_navigation_menu_current( int $menu_id, array $desired_items ): bool {
+		$current_items = wp_get_nav_menu_items(
+			$menu_id,
+			[
+				'orderby' => 'menu_order',
+				'order'   => 'ASC',
+			]
+		);
+
+		if ( ! is_array( $current_items ) || count( $current_items ) !== count( $desired_items ) ) {
+			return false;
+		}
+
+		foreach ( $desired_items as $index => $desired ) {
+			$current = $current_items[ $index ] ?? null;
+
+			if ( ! $current ) {
+				return false;
+			}
+
+			if ( (int) $current->object_id !== (int) $desired['page_id'] ) {
+				return false;
+			}
+
+			if ( (string) $current->title !== (string) $desired['label'] ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private function get_navigation_location( array $config ): string {
+		$locations = get_registered_nav_menus();
+
+		if ( empty( $locations ) ) {
+			return '';
+		}
+
+		$preferred = $config['theme_location'] ?? 'main';
+
+		if ( $preferred && isset( $locations[ $preferred ] ) ) {
+			return $preferred;
+		}
+
+		return (string) array_key_first( $locations );
+	}
+
+	private function is_navigation_location_assigned( string $location, int $menu_id ): bool {
+		$locations = get_theme_mod( 'nav_menu_locations', [] );
+
+		return isset( $locations[ $location ] ) && (int) $locations[ $location ] === $menu_id;
+	}
+
+	private function validate_home_queries( array $blueprint ): array {
+		$results = [];
+		$home    = $this->get_configured_page( $blueprint, 'home' );
+
+		if ( empty( $home['sections'] ) || ! is_array( $home['sections'] ) ) {
+			return $results;
+		}
+
+		foreach ( $home['sections'] as $section ) {
+			if ( ! is_array( $section ) || 'listing' !== ( $section['type'] ?? '' ) ) {
+				continue;
+			}
+
+			$query_key    = $section['query'] ?? '';
+			$listing_slug = $section['listing'] ?? '';
+			$listing      = $this->get_listing_by_slug( $blueprint, $listing_slug );
+
+			if ( ! $query_key || empty( $listing ) ) {
+				$results[] = [
+					'status'  => 'error',
+					'message' => 'Home listing section is missing query or listing.',
+				];
+				continue;
+			}
+
+			$query_args = $this->get_listing_query_args( $listing, $blueprint, $query_key );
+
+			if ( empty( $query_args ) ) {
+				$results[] = [
+					'status'  => 'error',
+					'message' => "Home query missing: {$query_key}",
+				];
+				continue;
+			}
+
+			$query = new WP_Query( $query_args );
+
+			$results[] = [
+				'status'  => $query->have_posts() ? 'ok' : 'error',
+				'message' => $query->have_posts()
+					? "Home query renders: {$query_key}"
+					: "Home query has no posts: {$query_key}",
+			];
+
+			wp_reset_postdata();
+		}
+
+		return $results;
 	}
 
 	private function execution_item(
@@ -412,7 +1067,8 @@ class Factory_Render_Adapter {
 	public function render_listing_shortcode( array $atts ): string {
 		$atts = shortcode_atts(
 			[
-				'slug' => '',
+				'slug'  => '',
+				'query' => '',
 			],
 			$atts
 		);
@@ -421,14 +1077,14 @@ class Factory_Render_Adapter {
 
 		foreach ( $blueprint['listings'] ?? [] as $listing ) {
 			if ( ( $listing['slug'] ?? '' ) === $atts['slug'] ) {
-				return $this->render_listing( $listing, $blueprint );
+				return $this->render_listing( $listing, $blueprint, (string) $atts['query'] );
 			}
 		}
 
 		return '';
 	}
 
-	private function render_listing( array $listing, array $blueprint ): string {
+	private function render_listing( array $listing, array $blueprint, string $query_key = '' ): string {
 		$post_type = $listing['post_type'] ?? '';
 
 		if ( ! $post_type ) {
@@ -437,14 +1093,13 @@ class Factory_Render_Adapter {
 
 		$is_property_listing = 'property' === $post_type;
 		$style_tokens        = $this->get_site_style_tokens( $blueprint );
+		$query_args          = $this->get_listing_query_args( $listing, $blueprint, $query_key );
 
-		$query = new WP_Query( [
-			'post_type'      => $post_type,
-			'post_status'    => 'publish',
-			'posts_per_page' => $is_property_listing ? 30 : 12,
-			'orderby'        => 'ID',
-			'order'          => 'ASC',
-		] );
+		if ( empty( $query_args ) ) {
+			return '<p>No query found.</p>';
+		}
+
+		$query = new WP_Query( $query_args );
 
 		if ( ! $query->have_posts() ) {
 			return '<p>No items found.</p>';
@@ -455,12 +1110,14 @@ class Factory_Render_Adapter {
 		ob_start();
 		?>
 
-		<section class="factory-listing-wrap" style="max-width: 1120px; margin: 80px auto; padding: 0 24px;">
-			<header style="margin-bottom: 40px;">
-				<h1 style="font-size: clamp(40px, 6vw, 72px); line-height: 1.05;">
-					<?php echo esc_html( $listing['title'] ?? 'Listing' ); ?>
-				</h1>
-			</header>
+		<?php if ( '' === $query_key ) : ?>
+			<section class="factory-listing-wrap" style="max-width: 1120px; margin: 80px auto; padding: 0 24px;">
+				<header style="margin-bottom: 40px;">
+					<h1 style="font-size: clamp(40px, 6vw, 72px); line-height: 1.05;">
+						<?php echo esc_html( $listing['title'] ?? 'Listing' ); ?>
+					</h1>
+				</header>
+		<?php endif; ?>
 
 			<div class="factory-listing-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px;">
 				<?php
@@ -521,12 +1178,113 @@ class Factory_Render_Adapter {
 
 				<?php endwhile; ?>
 			</div>
-		</section>
+
+		<?php if ( '' === $query_key ) : ?>
+			</section>
+		<?php endif; ?>
 
 		<?php
 		wp_reset_postdata();
 
 		return ob_get_clean();
+	}
+
+	private function get_listing_query_args( array $listing, array $blueprint, string $query_key = '' ): array {
+		$post_type = $listing['post_type'] ?? '';
+
+		if ( ! $post_type ) {
+			return [];
+		}
+
+		if ( '' === $query_key ) {
+			return [
+				'post_type'      => $post_type,
+				'post_status'    => 'publish',
+				'posts_per_page' => 'property' === $post_type ? 30 : 12,
+				'orderby'        => 'ID',
+				'order'          => 'ASC',
+			];
+		}
+
+		$definition = $blueprint['pages']['queries'][ $query_key ] ?? null;
+
+		if ( ! is_array( $definition ) ) {
+			return [];
+		}
+
+		$args = [
+			'post_type'      => sanitize_key( $definition['post_type'] ?? $post_type ),
+			'post_status'    => 'publish',
+			'posts_per_page' => max( 1, min( 30, absint( $definition['posts_per_page'] ?? 6 ) ) ),
+			'orderby'        => $this->sanitize_orderby( $definition['orderby'] ?? 'date' ),
+			'order'          => $this->sanitize_order( $definition['order'] ?? 'DESC' ),
+		];
+
+		$taxonomies = $definition['taxonomies'] ?? [];
+		$tax_query  = [];
+
+		if ( is_array( $taxonomies ) ) {
+			foreach ( $taxonomies as $taxonomy => $terms ) {
+				$taxonomy = sanitize_key( $taxonomy );
+				$terms    = is_array( $terms ) ? $terms : [ $terms ];
+				$slugs    = $this->resolve_taxonomy_term_slugs( $taxonomy, $terms );
+
+				if ( ! $taxonomy || empty( $slugs ) ) {
+					continue;
+				}
+
+				$tax_query[] = [
+					'taxonomy' => $taxonomy,
+					'field'    => 'slug',
+					'terms'    => $slugs,
+				];
+			}
+		}
+
+		if ( ! empty( $tax_query ) ) {
+			$args['tax_query'] = $tax_query;
+		}
+
+		return $args;
+	}
+
+	private function sanitize_orderby( $value ): string {
+		$value   = is_string( $value ) ? $value : 'date';
+		$allowed = [ 'date', 'ID', 'title', 'menu_order', 'modified' ];
+
+		return in_array( $value, $allowed, true ) ? $value : 'date';
+	}
+
+	private function sanitize_order( $value ): string {
+		$value = strtoupper( is_string( $value ) ? $value : 'DESC' );
+
+		return in_array( $value, [ 'ASC', 'DESC' ], true ) ? $value : 'DESC';
+	}
+
+	private function resolve_taxonomy_term_slugs( string $taxonomy, array $terms ): array {
+		$slugs = [];
+
+		foreach ( $terms as $term_name ) {
+			if ( ! is_string( $term_name ) && ! is_numeric( $term_name ) ) {
+				continue;
+			}
+
+			$term_name = trim( (string) $term_name );
+
+			if ( '' === $term_name ) {
+				continue;
+			}
+
+			$term = get_term_by( 'name', $term_name, $taxonomy );
+
+			if ( ! $term ) {
+				$term = get_term_by( 'slug', sanitize_title( $term_name ), $taxonomy );
+			}
+
+			$slugs[] = $term ? $term->slug : sanitize_title( $term_name );
+		}
+
+		return array_values( array_unique( $slugs ) );
 	}
 
 	private function render_property_card( int $post_id, array $style_tokens ): string {
@@ -803,6 +1561,131 @@ class Factory_Render_Adapter {
 		return ucwords( str_replace( '_', ' ', $key ) );
 	}
 
+	private function get_configured_page( array $blueprint, string $page_key ): array {
+		$page = $blueprint['pages'][ $page_key ] ?? [];
+
+		return is_array( $page ) ? $page : [];
+	}
+
+	private function get_configured_page_content( array $blueprint, string $page_key ): string {
+		if ( 'home' === $page_key ) {
+			return $this->render_home_page_content( $blueprint );
+		}
+
+		if ( 'contact' === $page_key ) {
+			return $this->render_contact_page_content( $blueprint );
+		}
+
+		$page = $this->get_configured_page( $blueprint, $page_key );
+
+		return is_string( $page['content'] ?? null ) ? $page['content'] : '';
+	}
+
+	private function render_home_page_content( array $blueprint ): string {
+		$home         = $this->get_configured_page( $blueprint, 'home' );
+		$sections     = is_array( $home['sections'] ?? null ) ? $home['sections'] : [];
+		$style_tokens = $this->get_site_style_tokens( $blueprint );
+		$primary      = $style_tokens['primary'];
+		$accent       = $style_tokens['accent'];
+		$background   = $style_tokens['background'];
+		$html         = '<div class="factory-home-page" style="background: ' . esc_attr( $background ) . '; color: #10201d; margin: -40px 0 0;">';
+
+		foreach ( $sections as $section ) {
+			if ( ! is_array( $section ) ) {
+				continue;
+			}
+
+			$type = $section['type'] ?? '';
+
+			if ( 'hero' === $type ) {
+				$title     = $section['title'] ?? ( $home['title'] ?? 'Kyiv Turquoise Realty' );
+				$subtitle  = $section['subtitle'] ?? '';
+				$cta_label = $section['cta_label'] ?? 'Browse properties';
+				$cta_url   = $section['cta_url'] ?? '/properties/';
+
+				$html .= '<section style="max-width: 1120px; margin: 0 auto; padding: 88px 24px 54px;">';
+				$html .= '<div style="max-width: 760px;">';
+				$html .= '<span style="display: inline-flex; border-radius: 999px; background: #fff; color: ' . esc_attr( $primary ) . '; padding: 8px 12px; font-size: 13px; font-weight: 800; margin-bottom: 18px;">Real Estate Beta</span>';
+				$html .= '<h1 style="font-size: clamp(44px, 7vw, 86px); line-height: 1; margin: 0 0 18px; letter-spacing: 0;">' . esc_html( $title ) . '</h1>';
+				$html .= '<p style="font-size: clamp(18px, 2.4vw, 26px); line-height: 1.45; color: #31524d; margin: 0 0 28px;">' . esc_html( $subtitle ) . '</p>';
+				$html .= '<a href="' . esc_url( $cta_url ) . '" style="display: inline-flex; align-items: center; border-radius: 999px; background: ' . esc_attr( $accent ) . '; color: #fff; padding: 14px 20px; font-size: 15px; font-weight: 900; text-decoration: none;">' . esc_html( $cta_label ) . '</a>';
+				$html .= '</div>';
+				$html .= '</section>';
+				continue;
+			}
+
+			if ( 'listing' === $type ) {
+				$title   = $section['title'] ?? 'Properties';
+				$query   = $section['query'] ?? '';
+				$listing = $section['listing'] ?? 'property-card';
+
+				$html .= '<section style="max-width: 1120px; margin: 0 auto; padding: 34px 24px;">';
+				$html .= '<header style="display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 22px;">';
+				$html .= '<div>';
+				$html .= '<span style="color: ' . esc_attr( $primary ) . '; font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0;">Kyiv catalog</span>';
+				$html .= '<h2 style="font-size: clamp(28px, 4vw, 44px); line-height: 1.08; margin: 6px 0 0;">' . esc_html( $title ) . '</h2>';
+				$html .= '</div>';
+				$html .= '<a href="/properties/" style="color: ' . esc_attr( $accent ) . '; font-size: 14px; font-weight: 900; text-decoration: none;">View all</a>';
+				$html .= '</header>';
+				$html .= sprintf(
+					'[factory_listing slug="%s" query="%s"]',
+					esc_attr( $listing ),
+					esc_attr( $query )
+				);
+				$html .= '</section>';
+				continue;
+			}
+
+			if ( 'cta' === $type ) {
+				$title     = $section['title'] ?? 'Ready to find your Kyiv property?';
+				$text      = $section['text'] ?? '';
+				$cta_label = $section['cta_label'] ?? 'Contact agency';
+				$cta_url   = $section['cta_url'] ?? '/contact/';
+
+				$html .= '<section style="max-width: 1120px; margin: 0 auto; padding: 44px 24px 84px;">';
+				$html .= '<div style="background: #fff; border: 1px solid #d7eee9; border-radius: 24px; padding: clamp(28px, 5vw, 54px); box-shadow: 0 18px 44px rgba(15, 118, 110, 0.11);">';
+				$html .= '<h2 style="font-size: clamp(30px, 4vw, 50px); line-height: 1.08; margin: 0 0 12px;">' . esc_html( $title ) . '</h2>';
+				$html .= '<p style="max-width: 620px; color: #52635f; font-size: 17px; line-height: 1.6; margin: 0 0 24px;">' . esc_html( $text ) . '</p>';
+				$html .= '<a href="' . esc_url( $cta_url ) . '" style="display: inline-flex; align-items: center; border-radius: 999px; background: ' . esc_attr( $primary ) . '; color: #fff; padding: 13px 18px; font-size: 14px; font-weight: 900; text-decoration: none;">' . esc_html( $cta_label ) . '</a>';
+				$html .= '</div>';
+				$html .= '</section>';
+			}
+		}
+
+		$html .= '</div>';
+
+		return $html;
+	}
+
+	private function render_contact_page_content( array $blueprint ): string {
+		$contact      = $this->get_configured_page( $blueprint, 'contact' );
+		$style_tokens = $this->get_site_style_tokens( $blueprint );
+		$primary      = $style_tokens['primary'];
+		$accent       = $style_tokens['accent'];
+		$background   = $style_tokens['background'];
+		$title        = $contact['title'] ?? 'Contact Kyiv Turquoise Realty';
+		$text         = $contact['text'] ?? '';
+		$phone        = $contact['phone'] ?? '';
+		$email        = $contact['email'] ?? '';
+		$cta_label    = $contact['cta_label'] ?? 'Browse properties';
+		$cta_url      = $contact['cta_url'] ?? '/properties/';
+
+		$html  = '<section class="factory-contact-page" style="background: ' . esc_attr( $background ) . '; margin: -40px 0 0; padding: 88px 24px; color: #10201d;">';
+		$html .= '<div style="max-width: 920px; margin: 0 auto;">';
+		$html .= '<span style="display: inline-flex; border-radius: 999px; background: #fff; color: ' . esc_attr( $primary ) . '; padding: 8px 12px; font-size: 13px; font-weight: 900; margin-bottom: 18px;">Kyiv agency</span>';
+		$html .= '<h1 style="font-size: clamp(42px, 6vw, 72px); line-height: 1.02; margin: 0 0 18px;">' . esc_html( $title ) . '</h1>';
+		$html .= '<p style="max-width: 680px; color: #52635f; font-size: 19px; line-height: 1.6; margin: 0 0 34px;">' . esc_html( $text ) . '</p>';
+		$html .= '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-bottom: 32px;">';
+		$html .= '<div style="background: #fff; border: 1px solid #d7eee9; border-radius: 20px; padding: 22px;"><strong style="display: block; color: ' . esc_attr( $primary ) . '; margin-bottom: 6px;">Phone</strong><span>' . esc_html( $phone ) . '</span></div>';
+		$html .= '<div style="background: #fff; border: 1px solid #d7eee9; border-radius: 20px; padding: 22px;"><strong style="display: block; color: ' . esc_attr( $primary ) . '; margin-bottom: 6px;">Email</strong><span>' . esc_html( $email ) . '</span></div>';
+		$html .= '</div>';
+		$html .= '<a href="' . esc_url( $cta_url ) . '" style="display: inline-flex; align-items: center; border-radius: 999px; background: ' . esc_attr( $accent ) . '; color: #fff; padding: 14px 20px; font-size: 15px; font-weight: 900; text-decoration: none;">' . esc_html( $cta_label ) . '</a>';
+		$html .= '</div>';
+		$html .= '</section>';
+
+		return $html;
+	}
+
 	private function get_archive_page_config( string $post_type ): array {
 		$blueprint = factory_get_blueprint();
 
@@ -823,6 +1706,16 @@ class Factory_Render_Adapter {
 		}
 
 		return '';
+	}
+
+	private function get_listing_by_slug( array $blueprint, string $slug ): array {
+		foreach ( $blueprint['listings'] ?? [] as $listing ) {
+			if ( ( $listing['slug'] ?? '' ) === $slug ) {
+				return $listing;
+			}
+		}
+
+		return [];
 	}
 
 	private function log( string $message ): void {
