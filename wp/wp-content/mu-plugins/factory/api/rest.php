@@ -101,8 +101,30 @@ add_action(
                 'permission_callback' => '__return_true',
             ]
         );
+        register_rest_route(
+            'factory/v1',
+            '/beta/real-estate/plan',
+            [
+                'methods'             => 'GET',
+                'callback'            => 'factory_rest_beta_real_estate_plan',
+                'permission_callback' => 'factory_rest_require_manage_options',
+            ]
+        );
+        register_rest_route(
+            'factory/v1',
+            '/beta/real-estate/apply',
+            [
+                'methods'             => 'POST',
+                'callback'            => 'factory_rest_beta_real_estate_apply',
+                'permission_callback' => 'factory_rest_require_manage_options',
+            ]
+        );
 	}
 );
+
+    function factory_rest_require_manage_options(): bool {
+        return current_user_can( 'manage_options' );
+    }
 
     function factory_rest_validate(): WP_REST_Response {
 
@@ -218,6 +240,119 @@ add_action(
         return true;
     }
 
+    function factory_rest_beta_real_estate_plan(): WP_REST_Response {
+        try {
+            $blueprint = factory_rest_load_real_estate_blueprint();
+            $plan      = factory_rest_build_plan( $blueprint );
+
+            return new WP_REST_Response(
+                [
+                    'status' => 'ok',
+                    'preset' => 'real-estate',
+                    'plan'   => $plan,
+                ]
+            );
+        } catch ( Throwable $e ) {
+            return factory_rest_beta_error_response( $e->getMessage() );
+        }
+    }
+
+    function factory_rest_beta_real_estate_apply(): WP_REST_Response {
+        try {
+            $blueprint = factory_rest_load_real_estate_blueprint();
+
+            if ( function_exists( 'factory_reset_diff_report' ) ) {
+                factory_reset_diff_report();
+            }
+
+            $execution = factory_apply_blueprint( $blueprint );
+            $plan      = factory_rest_build_plan( $blueprint );
+            $report    = factory_validate_blueprint_state( $blueprint, false );
+
+            $manifest_path = factory_save_run_manifest(
+                'Dashboard apply: real-estate',
+                'real-estate',
+                $blueprint,
+                $plan,
+                $report,
+                $report['status'] ?? 'error',
+                $execution
+            );
+
+            $results = function_exists( 'factory_build_manifest_results' )
+                ? factory_build_manifest_results( $report )
+                : [
+                    'summary' => [
+                        'ok'      => 0,
+                        'warning' => 0,
+                        'error'   => 0,
+                    ],
+                ];
+
+            return new WP_REST_Response(
+                [
+                    'status'           => $report['status'] ?? 'error',
+                    'message'          => 'Real Estate preset applied.',
+                    'preset'           => 'real-estate',
+                    'file'             => basename( $manifest_path ),
+                    'plan_summary'     => $plan['summary'] ?? [],
+                    'execution_count'  => count( $execution ),
+                    'validation_count' => count( $report['checks'] ?? [] ),
+                    'results_summary'  => $results['summary'] ?? [],
+                ]
+            );
+        } catch ( Throwable $e ) {
+            return factory_rest_beta_error_response( $e->getMessage() );
+        }
+    }
+
+    function factory_rest_load_real_estate_blueprint(): array {
+        $manager = new Factory_Blueprint_Preset_Manager();
+
+        return $manager->load_preset( 'real-estate' );
+    }
+
+    function factory_rest_build_plan( array $blueprint ): array {
+        $dry_run = new Factory_Dry_Run_Command();
+        $items   = $dry_run->get_plan_items( $blueprint );
+
+        return [
+            'version' => 1,
+            'summary' => factory_rest_plan_summary( $items ),
+            'items'   => $items,
+        ];
+    }
+
+    function factory_rest_plan_summary( array $items ): array {
+        $summary = [
+            'create'  => 0,
+            'update'  => 0,
+            'skip'    => 0,
+            'warning' => 0,
+            'error'   => 0,
+        ];
+
+        foreach ( $items as $item ) {
+            $action = $item['action'] ?? 'skip';
+
+            if ( isset( $summary[ $action ] ) ) {
+                $summary[ $action ]++;
+            }
+        }
+
+        return $summary;
+    }
+
+    function factory_rest_beta_error_response( string $message, int $status = 500 ): WP_REST_Response {
+        return new WP_REST_Response(
+            [
+                'status'  => 'error',
+                'message' => $message,
+            ],
+            $status
+        );
+    }
+
     function factory_rest_index(): WP_REST_Response {
 
         return new WP_REST_Response(
@@ -235,6 +370,8 @@ add_action(
                 '/index',
                 '/capabilities',
                 '/adapters',
+                '/beta/real-estate/plan',
+                '/beta/real-estate/apply',
                 ],
                 'description' => 'Runtime inspection and orchestration API for Factory.',
             ]

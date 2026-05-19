@@ -17,6 +17,9 @@
 		selectedFile: '',
 		errors: [],
 		loadingDetails: false,
+		betaAction: '',
+		betaMessage: null,
+		betaPlan: null,
 	};
 
 	function endpoint( path ) {
@@ -24,11 +27,14 @@
 		return base + path;
 	}
 
-	function request( path ) {
+	function request( path, options ) {
+		options = options || {};
+
 		return window.fetch(
 			endpoint( path ),
 			{
 				credentials: 'same-origin',
+				method: options.method || 'GET',
 				headers: {
 					'X-WP-Nonce': config.restNonce || '',
 				},
@@ -139,6 +145,40 @@
 		return '<div class="factory-demo-status"><span>' + escapeHtml( label ) + '</span>' + badge( isReady ? 'ok' : 'warning' ) + '</div>';
 	}
 
+	function renderBetaMessage() {
+		if ( ! state.betaMessage ) {
+			return '';
+		}
+
+		return '<div class="factory-demo-message factory-demo-message-' + escapeHtml( statusValue( state.betaMessage.status ) ) + '">' +
+			escapeHtml( state.betaMessage.message || '' ) +
+		'</div>';
+	}
+
+	function renderBetaPlanPreview() {
+		if ( ! state.betaPlan ) {
+			return '<p class="factory-empty">Use Preview plan to inspect the current Real Estate convergence plan.</p>';
+		}
+
+		const summary = state.betaPlan.summary || {};
+		const items = Array.isArray( state.betaPlan.items ) ? state.betaPlan.items.slice( 0, 6 ) : [];
+
+		return [
+			'<div class="factory-metric-grid factory-demo-metrics">',
+				renderMetric( 'Create', summaryValue( summary, 'create' ) ),
+				renderMetric( 'Update', summaryValue( summary, 'update' ) ),
+				renderMetric( 'Skip', summaryValue( summary, 'skip' ) ),
+				renderMetric( 'Warning', summaryValue( summary, 'warning' ) ),
+				renderMetric( 'Error', summaryValue( summary, 'error' ) ),
+			'</div>',
+			items.length
+				? '<ul class="factory-demo-plan-list">' + items.map( function ( item ) {
+					return '<li><strong>' + escapeHtml( item.action || 'skip' ) + '</strong><span>' + escapeHtml( item.message || '' ) + '</span></li>';
+				} ).join( '' ) + '</ul>'
+				: '<p class="factory-empty">No plan items returned.</p>',
+		].join( '' );
+	}
+
 	function renderHeader() {
 		const doctorStatus = state.doctor ? state.doctor.status : 'unknown';
 		const latestStatus = runFromLatest().status || 'unknown';
@@ -196,6 +236,7 @@
 		const siteGenerated = Boolean( run.file ) && executionCount( run ) > 0;
 		const doctorOk = statusValue( state.doctor && state.doctor.status ) === 'ok';
 		const validationOk = latestValidationOk();
+		const isBusy = Boolean( state.betaAction );
 
 		return [
 			'<section class="factory-card factory-card-wide factory-demo-panel">',
@@ -203,7 +244,7 @@
 					'<div>',
 						'<span class="factory-demo-kicker">Preset flow</span>',
 						'<h2>Real Estate Beta Demo</h2>',
-						'<p>Read-only proof that the generated Kyiv real estate site is applied, converged, and visible on the frontend.</p>',
+						'<p>Create, verify, and open the generated Kyiv real estate catalog from this WordPress admin panel.</p>',
 					'</div>',
 					'<div class="factory-demo-statuses">',
 						renderDemoStatus( 'Site generated', siteGenerated ),
@@ -211,6 +252,18 @@
 						renderDemoStatus( 'Doctor OK', doctorOk ),
 					'</div>',
 				'</div>',
+				'<div class="factory-demo-actions">',
+					'<button type="button" class="button button-primary" data-factory-beta-action="plan"' + ( isBusy ? ' disabled' : '' ) + '>',
+						state.betaAction === 'plan' ? 'Previewing...' : 'Preview plan',
+					'</button>',
+					'<button type="button" class="button" data-factory-beta-action="apply"' + ( isBusy ? ' disabled' : '' ) + '>',
+						state.betaAction === 'apply' ? 'Applying...' : 'Apply preset',
+					'</button>',
+					'<button type="button" class="button" data-factory-beta-action="refresh"' + ( isBusy ? ' disabled' : '' ) + '>',
+						state.betaAction === 'refresh' ? 'Refreshing...' : 'Refresh validation proof',
+					'</button>',
+				'</div>',
+				renderBetaMessage(),
 				'<div class="factory-demo-grid">',
 					'<div>',
 						'<h3>Preset Summary</h3>',
@@ -233,6 +286,10 @@
 						'</div>',
 					'</div>',
 				'</div>',
+				'<div class="factory-demo-plan-preview">',
+					'<h3>Preview Plan</h3>',
+					renderBetaPlanPreview(),
+				'</div>',
 				'<div class="factory-demo-grid factory-demo-proof-grid">',
 					'<div>',
 						'<h3>Apply Proof</h3>',
@@ -247,6 +304,7 @@
 					'<div>',
 						'<h3>Open Frontend</h3>',
 						'<div class="factory-demo-links">',
+							'<a href="' + escapeHtml( homeUrl( '/' ) ) + '" target="_blank" rel="noopener noreferrer">Open Website</a>',
 							'<a href="' + escapeHtml( homeUrl( '/properties/' ) ) + '" target="_blank" rel="noopener noreferrer">Open Properties Archive</a>',
 							'<a href="' + escapeHtml( homeUrl( '/property/turquoise-view-apartment-in-pechersk/' ) ) + '" target="_blank" rel="noopener noreferrer">Open sample Apartment</a>',
 							'<a href="' + escapeHtml( homeUrl( '/property/solomianskyi-business-office/' ) ) + '" target="_blank" rel="noopener noreferrer">Open sample Commercial</a>',
@@ -428,6 +486,20 @@
 				}
 			} );
 		} );
+
+		root.querySelectorAll( '[data-factory-beta-action]' ).forEach( function ( button ) {
+			button.addEventListener( 'click', function () {
+				const action = button.getAttribute( 'data-factory-beta-action' );
+
+				if ( action === 'plan' ) {
+					previewRealEstatePlan();
+				} else if ( action === 'apply' ) {
+					applyRealEstatePreset();
+				} else if ( action === 'refresh' ) {
+					refreshValidationProof();
+				}
+			} );
+		} );
 	}
 
 	function loadRunDetails( file ) {
@@ -449,6 +521,123 @@
 				state.loadingDetails = false;
 				render();
 			} );
+	}
+
+	function setBetaMessage( status, message ) {
+		state.betaMessage = {
+			status: status,
+			message: message,
+		};
+	}
+
+	function previewRealEstatePlan() {
+		state.betaAction = 'plan';
+		state.betaMessage = null;
+		render();
+
+		request( config.endpoints?.realEstatePlan || '/beta/real-estate/plan' )
+			.then( function ( data ) {
+				state.betaPlan = data.plan || null;
+				setBetaMessage( 'ok', 'Preview plan loaded.' );
+			} )
+			.catch( function ( error ) {
+				setBetaMessage( 'error', 'Preview plan failed: ' + error.message );
+			} )
+			.finally( function () {
+				state.betaAction = '';
+				render();
+			} );
+	}
+
+	function applyRealEstatePreset() {
+		state.betaAction = 'apply';
+		state.betaMessage = null;
+		render();
+
+		request(
+			config.endpoints?.realEstateApply || '/beta/real-estate/apply',
+			{ method: 'POST' }
+		)
+			.then( function ( data ) {
+				state.betaPlan = data.plan_summary
+					? {
+						summary: data.plan_summary,
+						items: [],
+					}
+					: state.betaPlan;
+				setBetaMessage(
+					statusValue( data.status ) === 'error' ? 'error' : 'ok',
+					data.message || 'Real Estate preset applied.'
+				);
+				return refreshDashboardData();
+			} )
+			.catch( function ( error ) {
+				setBetaMessage( 'error', 'Apply preset failed: ' + error.message );
+			} )
+			.finally( function () {
+				state.betaAction = '';
+				render();
+			} );
+	}
+
+	function refreshValidationProof() {
+		state.betaAction = 'refresh';
+		state.betaMessage = null;
+		render();
+
+		refreshDashboardData()
+			.then( function () {
+				setBetaMessage( 'ok', 'Validation proof refreshed.' );
+			} )
+			.catch( function ( error ) {
+				setBetaMessage( 'error', 'Refresh failed: ' + error.message );
+			} )
+			.finally( function () {
+				state.betaAction = '';
+				render();
+			} );
+	}
+
+	function refreshDashboardData() {
+		return Promise.allSettled( [
+			request( config.endpoints?.doctor || '/doctor' ),
+			request( config.endpoints?.runs || '/runs?limit=20' ),
+			request( config.endpoints?.latest || '/run/latest' ),
+			request( config.endpoints?.adapters || '/adapters' ),
+		] ).then( function ( results ) {
+			const labels = [ 'Doctor', 'Runs', 'Latest run', 'Adapters' ];
+			const failures = [];
+
+			results.forEach( function ( result, index ) {
+				if ( result.status === 'rejected' ) {
+					failures.push( labels[ index ] + ': ' + result.reason.message );
+				}
+			} );
+
+			if ( failures.length ) {
+				throw new Error( failures.join( '; ' ) );
+			}
+
+			state.errors = [];
+
+			if ( results[0].status === 'fulfilled' ) {
+				state.doctor = results[0].value;
+			}
+
+			if ( results[1].status === 'fulfilled' ) {
+				state.runs = Array.isArray( results[1].value.runs ) ? results[1].value.runs : [];
+			}
+
+			if ( results[2].status === 'fulfilled' ) {
+				state.latest = results[2].value;
+				state.selectedRun = results[2].value;
+				state.selectedFile = results[2].value.run?.file || '';
+			}
+
+			if ( results[3].status === 'fulfilled' ) {
+				state.adapters = Array.isArray( results[3].value.adapters ) ? results[3].value.adapters : [];
+			}
+		} );
 	}
 
 	function loadDashboard() {

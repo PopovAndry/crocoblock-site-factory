@@ -65,7 +65,8 @@
     "archive": {
       "post_type": "property",
       "slug": "properties",
-      "title": "Properties"
+      "title": "Properties",
+      "front_page": true
     }
   },
   "cpt": [

@@ -55,6 +55,8 @@ function factory_enqueue_admin_dashboard_assets( string $hook ): void {
 				'latest'  => '/run/latest',
 				'run'     => '/run/{file}',
 				'adapters' => '/adapters',
+				'realEstatePlan'  => '/beta/real-estate/plan',
+				'realEstateApply' => '/beta/real-estate/apply',
 			],
 		]
 	);
