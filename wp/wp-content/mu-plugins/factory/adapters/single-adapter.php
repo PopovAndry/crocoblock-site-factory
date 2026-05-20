@@ -246,18 +246,38 @@ class Factory_Single_Adapter {
 			home_url( '/contact/' )
 		);
 		$stats         = [];
+		$details       = [];
 
 		if ( is_numeric( $bedrooms ) && (float) $bedrooms > 0 ) {
-			$stats[] = number_format( (float) $bedrooms ) . ' bed';
+			$stats[]   = number_format( (float) $bedrooms ) . ' bed';
+			$details[] = [ 'Bedrooms', number_format( (float) $bedrooms ) ];
 		}
 
 		if ( '' !== $bathrooms && is_numeric( $bathrooms ) && (float) $bathrooms > 0 ) {
-			$stats[] = number_format( (float) $bathrooms ) . ' bath';
+			$stats[]   = number_format( (float) $bathrooms ) . ' bath';
+			$details[] = [ 'Bathrooms', number_format( (float) $bathrooms ) ];
 		}
 
 		if ( '' !== $property_size && is_numeric( $property_size ) ) {
-			$stats[] = number_format( (float) $property_size ) . ' sq m';
+			$stats[]   = number_format( (float) $property_size ) . ' sq m';
+			$details[] = [ 'Size', number_format( (float) $property_size ) . ' sq m' ];
 		}
+
+			if ( '' !== $price ) {
+			$details[] = [ 'Price', $this->format_property_price( $price ) ];
+		}
+
+			if ( '' !== $purpose ) {
+				$details[] = [ 'Purpose', $purpose ];
+			}
+
+			if ( '' !== $property_type ) {
+				$details[] = [ 'Property type', $property_type ];
+			}
+
+			if ( '' !== $district ) {
+				$details[] = [ 'District', $district ];
+			}
 
 		ob_start();
 		?>
@@ -296,7 +316,7 @@ class Factory_Single_Adapter {
 
 					<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 28px; align-items: start;">
 						<div>
-							<h1 style="font-size: clamp(32px, 4vw, 54px); line-height: 1.08; margin: 0 0 16px; color: #10201d;">
+							<h1 style="font-size: clamp(32px, 3.5vw, 48px); line-height: 1.08; margin: 0 0 16px; color: #10201d;">
 								<?php echo esc_html( $title ); ?>
 							</h1>
 
@@ -314,11 +334,11 @@ class Factory_Single_Adapter {
 						</div>
 
 						<?php if ( '' !== $price ) : ?>
-							<div style="border: 1px solid #d7eee9; border-radius: 20px; background: #fff; padding: 22px; box-shadow: 0 14px 34px rgba(15, 118, 110, 0.09);">
+						<div style="border: 1px solid #d7eee9; border-radius: 18px; background: #fff; padding: 16px 18px; box-shadow: 0 12px 28px rgba(15, 118, 110, 0.08); max-width: 260px;">
 								<div style="color: #52635f; font-size: 13px; font-weight: 800; margin-bottom: 8px; text-transform: uppercase;">
 									Price
 								</div>
-								<div style="color: <?php echo esc_attr( $primary ); ?>; font-size: 32px; line-height: 1.1; font-weight: 900;">
+								<div style="color: <?php echo esc_attr( $primary ); ?>; font-size: 26px; line-height: 1.1; font-weight: 900;">
 									<?php echo esc_html( $this->format_property_price( $price ) ); ?>
 								</div>
 							</div>
@@ -345,6 +365,43 @@ class Factory_Single_Adapter {
 						<div style="color: #263633; font-size: 18px; line-height: 1.75;">
 							<?php echo wp_kses_post( $content ); ?>
 						</div>
+						<?php if ( ! empty( $details ) ) : ?>
+					<section style="margin-top: 30px;">
+						<h2 style="font-size: 22px; line-height: 1.2; margin: 0 0 14px; color: #10201d;">
+							Property details
+						</h2>
+						<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+							<?php foreach ( $details as $detail ) : ?>
+								<div style="border: 1px solid #d7eee9; border-radius: 16px; background: #fff; padding: 14px 16px;">
+									<div style="color: #52635f; font-size: 12px; font-weight: 800; margin-bottom: 6px; text-transform: uppercase;">
+										<?php echo esc_html( $detail[0] ); ?>
+									</div>
+									<div style="color: #10201d; font-size: 16px; font-weight: 800; line-height: 1.3;">
+										<?php echo esc_html( $detail[1] ); ?>
+									</div>
+								</div>
+							<?php endforeach; ?>
+						</div>
+					</section>
+				<?php endif; ?>
+
+				<?php if ( '' !== $address || '' !== $district ) : ?>
+					<section style="margin-top: 30px; border: 1px solid #d7eee9; border-radius: 18px; background: <?php echo esc_attr( $background ); ?>; padding: 18px;">
+						<h2 style="font-size: 20px; line-height: 1.2; margin: 0 0 10px; color: #10201d;">
+							Location
+						</h2>
+						<?php if ( '' !== $address ) : ?>
+							<div style="color: #263633; font-size: 15px; line-height: 1.55; margin-bottom: 6px;">
+								<?php echo esc_html( $address ); ?>
+							</div>
+						<?php endif; ?>
+						<?php if ( '' !== $district ) : ?>
+							<div style="color: <?php echo esc_attr( $primary ); ?>; font-size: 14px; line-height: 1.45; font-weight: 800;">
+								<?php echo esc_html( $district ); ?>
+							</div>
+						<?php endif; ?>
+					</section>
+				<?php endif; ?>
 					</section>
 
 					<aside id="factory-property-contact" style="border: 1px solid #d7eee9; border-radius: 20px; background: #fff; padding: 24px; box-shadow: 0 16px 38px rgba(15, 118, 110, 0.1);">

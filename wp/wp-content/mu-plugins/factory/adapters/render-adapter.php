@@ -1847,7 +1847,7 @@ class Factory_Render_Adapter {
 		$accent       = $style_tokens['accent'];
 		$background   = $style_tokens['background'];
 		$html         = '<style>body.front-page .entry-title, body.front-page .page-title, body.home .entry-title, body.home .page-title { display: none !important; }</style>';
-		$html        .= '<div class="factory-home-page" style="background: ' . esc_attr( $background ) . '; color: #10201d; margin: -40px 0 0;">';
+		$html        .= '<div class="factory-home-page" style="background: #fff; color: #10201d; margin: -40px 0 0;">';
 
 		foreach ( $sections as $section ) {
 			if ( ! is_array( $section ) ) {
