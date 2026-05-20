@@ -1846,7 +1846,8 @@ class Factory_Render_Adapter {
 		$primary      = $style_tokens['primary'];
 		$accent       = $style_tokens['accent'];
 		$background   = $style_tokens['background'];
-		$html         = '<div class="factory-home-page" style="background: ' . esc_attr( $background ) . '; color: #10201d; margin: -40px 0 0;">';
+		$html         = '<style>body.front-page .entry-title, body.front-page .page-title, body.home .entry-title, body.home .page-title { display: none !important; }</style>';
+		$html        .= '<div class="factory-home-page" style="background: ' . esc_attr( $background ) . '; color: #10201d; margin: -40px 0 0;">';
 
 		foreach ( $sections as $section ) {
 			if ( ! is_array( $section ) ) {
@@ -1861,12 +1862,14 @@ class Factory_Render_Adapter {
 				$cta_label = $section['cta_label'] ?? 'Browse properties';
 				$cta_url   = $section['cta_url'] ?? '/properties/';
 
-				$html .= '<section style="max-width: 1120px; margin: 0 auto; padding: 88px 24px 54px;">';
-				$html .= '<div style="max-width: 760px;">';
+				$html .= '<section class="factory-home-hero" style="width: 100vw; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); background: ' . esc_attr( $background ) . '; padding: 76px 0 54px;">';
+				$html .= '<div style="max-width: 1120px; margin: 0 auto; padding: 0 24px;">';
+				$html .= '<div style="max-width: 720px;">';
 				$html .= '<span style="display: inline-flex; border-radius: 999px; background: #fff; color: ' . esc_attr( $primary ) . '; padding: 8px 12px; font-size: 13px; font-weight: 800; margin-bottom: 18px;">Real Estate Beta</span>';
-				$html .= '<h1 style="font-size: clamp(44px, 7vw, 86px); line-height: 1; margin: 0 0 18px; letter-spacing: 0;">' . esc_html( $title ) . '</h1>';
+				$html .= '<h1 style="font-size: clamp(36px, 4.5vw, 56px); line-height: 1.05; margin: 0 0 18px; letter-spacing: 0;">' . esc_html( $title ) . '</h1>';
 				$html .= '<p style="font-size: clamp(18px, 2.4vw, 26px); line-height: 1.45; color: #31524d; margin: 0 0 28px;">' . esc_html( $subtitle ) . '</p>';
 				$html .= '<a href="' . esc_url( $cta_url ) . '" style="display: inline-flex; align-items: center; border-radius: 999px; background: ' . esc_attr( $accent ) . '; color: #fff; padding: 14px 20px; font-size: 15px; font-weight: 900; text-decoration: none;">' . esc_html( $cta_label ) . '</a>';
+				$html .= '</div>';
 				$html .= '</div>';
 				$html .= '</section>';
 				continue;

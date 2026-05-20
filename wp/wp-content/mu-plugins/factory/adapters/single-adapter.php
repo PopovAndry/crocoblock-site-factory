@@ -241,6 +241,10 @@ class Factory_Single_Adapter {
 		$purpose       = $this->get_property_meta_or_term( $post_id, 'purpose' );
 		$property_type = $this->get_property_meta_or_term( $post_id, 'property_type' );
 		$content       = apply_filters( 'the_content', get_the_content() );
+		$contact_url   = add_query_arg(
+			[ 'property' => sanitize_title( get_post_field( 'post_name', $post_id ) ) ],
+			home_url( '/contact/' )
+		);
 		$stats         = [];
 
 		if ( is_numeric( $bedrooms ) && (float) $bedrooms > 0 ) {
@@ -352,7 +356,7 @@ class Factory_Single_Adapter {
 							Contact the agency to schedule a viewing or request more details.
 						</p>
 
-						<a href="#factory-property-contact" style="display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: <?php echo esc_attr( $accent ); ?>; color: #fff; padding: 11px 16px; font-size: 14px; font-weight: 900; text-decoration: none;">
+						<a href="<?php echo esc_url( $contact_url ); ?>" style="display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: <?php echo esc_attr( $accent ); ?>; color: #fff; padding: 11px 16px; font-size: 14px; font-weight: 900; text-decoration: none;">
 							Contact agency
 						</a>
 					</aside>
