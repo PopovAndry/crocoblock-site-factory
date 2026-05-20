@@ -10,6 +10,16 @@ class Factory_Render_Adapter {
 
 	public function register( array $blueprint ): void {
 		add_shortcode( 'factory_listing', [ $this, 'render_listing_shortcode' ] );
+		add_action( 'template_redirect', [ $this, 'redirect_property_archive' ] );
+	}
+
+	public function redirect_property_archive(): void {
+		if ( is_admin() || ! is_post_type_archive( 'property' ) ) {
+			return;
+		}
+
+		wp_safe_redirect( home_url( '/properties/' ), 302 );
+		exit;
 	}
 
 	public function apply( array $blueprint ): void {
