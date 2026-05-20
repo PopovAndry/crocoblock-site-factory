@@ -1092,16 +1092,22 @@ class Factory_Render_Adapter {
 		}
 
 		$is_property_listing = 'property' === $post_type;
+		$is_property_archive = $is_property_listing && '' === $query_key;
 		$style_tokens        = $this->get_site_style_tokens( $blueprint );
+		$property_filters    = $is_property_archive ? $this->get_property_filter_state() : [];
 		$query_args          = $this->get_listing_query_args( $listing, $blueprint, $query_key );
 
 		if ( empty( $query_args ) ) {
 			return '<p>No query found.</p>';
 		}
 
+		if ( $is_property_archive ) {
+			$query_args = $this->apply_property_filters_to_query_args( $query_args, $property_filters );
+		}
+
 		$query = new WP_Query( $query_args );
 
-		if ( ! $query->have_posts() ) {
+		if ( ! $query->have_posts() && ! $is_property_archive ) {
 			return '<p>No items found.</p>';
 		}
 
@@ -1117,8 +1123,13 @@ class Factory_Render_Adapter {
 						<?php echo esc_html( $listing['title'] ?? 'Listing' ); ?>
 					</h1>
 				</header>
+
+				<?php if ( $is_property_archive ) : ?>
+					<?php echo $this->render_property_filters( $property_filters, $query, $style_tokens ); ?>
+				<?php endif; ?>
 		<?php endif; ?>
 
+		<?php if ( $query->have_posts() ) : ?>
 			<div class="factory-listing-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px;">
 				<?php
 				while ( $query->have_posts() ) :
@@ -1178,6 +1189,14 @@ class Factory_Render_Adapter {
 
 				<?php endwhile; ?>
 			</div>
+		<?php elseif ( $is_property_archive ) : ?>
+			<div class="factory-property-empty" style="background: #fff; border: 1px solid #d7eee9; border-radius: 20px; padding: 28px; color: #52635f;">
+				<strong style="display: block; color: #10201d; font-size: 18px; margin-bottom: 8px;">
+					<?php echo esc_html( 'No properties match your filters.' ); ?>
+				</strong>
+				<?php echo esc_html( 'Try adjusting your search.' ); ?>
+			</div>
+		<?php endif; ?>
 
 		<?php if ( '' === $query_key ) : ?>
 			</section>
@@ -1187,6 +1206,235 @@ class Factory_Render_Adapter {
 		wp_reset_postdata();
 
 		return ob_get_clean();
+	}
+
+	private function get_property_filter_state(): array {
+		$options = $this->get_property_filter_options();
+		$state   = [
+			'purpose'       => '',
+			'property_type' => '',
+			'district'      => '',
+			'bedrooms'      => '',
+			'price_min'     => '',
+			'price_max'     => '',
+		];
+
+		foreach ( [ 'purpose', 'property_type', 'district', 'bedrooms' ] as $key ) {
+			$value = $this->get_query_param_string( $key );
+
+			if ( '' !== $value && in_array( $value, $options[ $key ], true ) ) {
+				$state[ $key ] = $value;
+			}
+		}
+
+		foreach ( [ 'price_min', 'price_max' ] as $key ) {
+			$value = $this->get_query_param_string( $key );
+
+			if ( '' !== $value && preg_match( '/^\d+$/', $value ) ) {
+				$state[ $key ] = (string) absint( $value );
+			}
+		}
+
+		if (
+			'' !== $state['price_min']
+			&& '' !== $state['price_max']
+			&& (int) $state['price_min'] > (int) $state['price_max']
+		) {
+			$min                = $state['price_max'];
+			$state['price_max'] = $state['price_min'];
+			$state['price_min'] = $min;
+		}
+
+		return $state;
+	}
+
+	private function get_query_param_string( string $key ): string {
+		if ( ! isset( $_GET[ $key ] ) ) {
+			return '';
+		}
+
+		$value = $_GET[ $key ];
+
+		if ( is_array( $value ) ) {
+			return '';
+		}
+
+		$value = function_exists( 'wp_unslash' ) ? wp_unslash( $value ) : $value;
+		$value = is_string( $value ) || is_numeric( $value ) ? trim( (string) $value ) : '';
+
+		return function_exists( 'sanitize_text_field' ) ? sanitize_text_field( $value ) : $value;
+	}
+
+	private function get_property_filter_options(): array {
+		return [
+			'purpose'       => [ 'Sale', 'Rent' ],
+			'property_type' => [ 'Apartment', 'House', 'Commercial' ],
+			'district'      => [
+				'Pechersk',
+				'Obolon',
+				'Podil',
+				'Holosiivskyi',
+				'Shevchenkivskyi',
+				'Darnytskyi',
+				'Solomianskyi',
+				'Desnianskyi',
+			],
+			'bedrooms'      => [ '1', '2', '3', '4' ],
+		];
+	}
+
+	private function apply_property_filters_to_query_args( array $args, array $filters ): array {
+		$tax_query  = isset( $args['tax_query'] ) && is_array( $args['tax_query'] ) ? $args['tax_query'] : [];
+		$meta_query = isset( $args['meta_query'] ) && is_array( $args['meta_query'] ) ? $args['meta_query'] : [];
+
+		foreach ( [ 'purpose', 'property_type', 'district' ] as $taxonomy ) {
+			if ( empty( $filters[ $taxonomy ] ) ) {
+				continue;
+			}
+
+			$slugs = $this->resolve_taxonomy_term_slugs( $taxonomy, [ $filters[ $taxonomy ] ] );
+
+			if ( empty( $slugs ) ) {
+				continue;
+			}
+
+			$tax_query[] = [
+				'taxonomy' => $taxonomy,
+				'field'    => 'slug',
+				'terms'    => $slugs,
+			];
+		}
+
+		if ( '' !== ( $filters['bedrooms'] ?? '' ) ) {
+			$meta_query[] = [
+				'key'     => 'bedrooms',
+				'value'   => (int) $filters['bedrooms'],
+				'compare' => '>=',
+				'type'    => 'NUMERIC',
+			];
+		}
+
+		if ( '' !== ( $filters['price_min'] ?? '' ) && '' !== ( $filters['price_max'] ?? '' ) ) {
+			$meta_query[] = [
+				'key'     => 'price',
+				'value'   => [ (int) $filters['price_min'], (int) $filters['price_max'] ],
+				'compare' => 'BETWEEN',
+				'type'    => 'NUMERIC',
+			];
+		} elseif ( '' !== ( $filters['price_min'] ?? '' ) ) {
+			$meta_query[] = [
+				'key'     => 'price',
+				'value'   => (int) $filters['price_min'],
+				'compare' => '>=',
+				'type'    => 'NUMERIC',
+			];
+		} elseif ( '' !== ( $filters['price_max'] ?? '' ) ) {
+			$meta_query[] = [
+				'key'     => 'price',
+				'value'   => (int) $filters['price_max'],
+				'compare' => '<=',
+				'type'    => 'NUMERIC',
+			];
+		}
+
+		if ( ! empty( $tax_query ) ) {
+			if ( count( $tax_query ) > 1 ) {
+				$tax_query['relation'] = 'AND';
+			}
+
+			$args['tax_query'] = $tax_query;
+		}
+
+		if ( ! empty( $meta_query ) ) {
+			if ( count( $meta_query ) > 1 ) {
+				$meta_query['relation'] = 'AND';
+			}
+
+			$args['meta_query'] = $meta_query;
+		}
+
+		return $args;
+	}
+
+	private function render_property_filters( array $filters, WP_Query $query, array $style_tokens ): string {
+		$options   = $this->get_property_filter_options();
+		$reset_url = $this->get_property_filter_reset_url();
+		$count     = (int) $query->found_posts;
+		$label     = 1 === $count ? 'property found' : 'properties found';
+
+		ob_start();
+		?>
+
+		<form class="factory-property-filters" method="get" action="<?php echo esc_url( $reset_url ); ?>" style="background: <?php echo esc_attr( $style_tokens['background'] ); ?>; border: 1px solid #b9e6de; border-radius: 20px; padding: 18px; margin: 0 0 24px;">
+			<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; align-items: end;">
+				<?php echo $this->render_property_filter_select( 'purpose', 'Purpose', $filters['purpose'], $options['purpose'], [] ); ?>
+				<?php echo $this->render_property_filter_select( 'property_type', 'Property Type', $filters['property_type'], $options['property_type'], [] ); ?>
+				<?php echo $this->render_property_filter_select( 'district', 'District', $filters['district'], $options['district'], [] ); ?>
+				<?php echo $this->render_property_filter_select( 'bedrooms', 'Bedrooms', $filters['bedrooms'], $options['bedrooms'], [ '1' => '1+', '2' => '2+', '3' => '3+', '4' => '4+' ] ); ?>
+
+				<label style="display: grid; gap: 7px; color: #213532; font-size: 13px; font-weight: 800;">
+					<?php echo esc_html( 'Price min' ); ?>
+					<input type="number" min="0" step="1" name="price_min" value="<?php echo esc_attr( $filters['price_min'] ); ?>" placeholder="100000" style="width: 100%; border: 1px solid #9ddbd2; border-radius: 12px; min-height: 42px; padding: 8px 11px; background: #fff;">
+				</label>
+
+				<label style="display: grid; gap: 7px; color: #213532; font-size: 13px; font-weight: 800;">
+					<?php echo esc_html( 'Price max' ); ?>
+					<input type="number" min="0" step="1" name="price_max" value="<?php echo esc_attr( $filters['price_max'] ); ?>" placeholder="300000" style="width: 100%; border: 1px solid #9ddbd2; border-radius: 12px; min-height: 42px; padding: 8px 11px; background: #fff;">
+				</label>
+
+				<div style="display: flex; gap: 10px; flex-wrap: wrap;">
+					<button type="submit" style="border: 0; border-radius: 999px; background: <?php echo esc_attr( $style_tokens['primary'] ); ?>; color: #fff; min-height: 42px; padding: 0 18px; font-weight: 800; cursor: pointer;">
+						<?php echo esc_html( 'Search' ); ?>
+					</button>
+					<a href="<?php echo esc_url( $reset_url ); ?>" style="display: inline-flex; align-items: center; min-height: 42px; color: <?php echo esc_attr( $style_tokens['primary'] ); ?>; font-weight: 800; text-decoration: none;">
+						<?php echo esc_html( 'Reset' ); ?>
+					</a>
+				</div>
+			</div>
+		</form>
+
+		<div class="factory-property-results-count" style="margin: 0 0 20px; color: #52635f; font-size: 15px; font-weight: 700;">
+			<?php echo esc_html( "{$count} {$label}" ); ?>
+		</div>
+
+		<?php
+		return ob_get_clean();
+	}
+
+	private function render_property_filter_select(
+		string $name,
+		string $label,
+		string $selected,
+		array $options,
+		array $labels
+	): string {
+		ob_start();
+		?>
+
+		<label style="display: grid; gap: 7px; color: #213532; font-size: 13px; font-weight: 800;">
+			<?php echo esc_html( $label ); ?>
+			<select name="<?php echo esc_attr( $name ); ?>" style="width: 100%; border: 1px solid #9ddbd2; border-radius: 12px; min-height: 42px; padding: 8px 11px; background: #fff; color: #10201d;">
+				<option value=""><?php echo esc_html( 'Any' ); ?></option>
+				<?php foreach ( $options as $option ) : ?>
+					<option value="<?php echo esc_attr( $option ); ?>" <?php selected( $selected, $option ); ?>>
+						<?php echo esc_html( $labels[ $option ] ?? $option ); ?>
+					</option>
+				<?php endforeach; ?>
+			</select>
+		</label>
+
+		<?php
+		return ob_get_clean();
+	}
+
+	private function get_property_filter_reset_url(): string {
+		$permalink = get_permalink();
+
+		if ( $permalink ) {
+			return $permalink;
+		}
+
+		return home_url( '/properties/' );
 	}
 
 	private function get_listing_query_args( array $listing, array $blueprint, string $query_key = '' ): array {
