@@ -3,6 +3,7 @@
 
 	const config = window.FactoryDashboardConfig || {};
 	const root = document.getElementById( 'factory-dashboard-root' );
+	const realEstatePrompt = 'Create a Kyiv real estate agency website in turquoise colors with 30 properties, image pools, a homepage with featured listings, a property catalog, single property pages, a contact page, and validation proof.';
 
 	if ( ! root ) {
 		return;
@@ -20,6 +21,7 @@
 		betaAction: '',
 		betaMessage: null,
 		betaPlan: null,
+		lastActionAt: '',
 	};
 
 	function endpoint( path ) {
@@ -150,9 +152,27 @@
 			return '';
 		}
 
-		return '<div class="factory-demo-message factory-demo-message-' + escapeHtml( statusValue( state.betaMessage.status ) ) + '">' +
-			escapeHtml( state.betaMessage.message || '' ) +
-		'</div>';
+		return [
+			'<div class="factory-demo-message factory-demo-message-' + escapeHtml( statusValue( state.betaMessage.status ) ) + '">',
+				'<span>' + escapeHtml( state.betaMessage.message || '' ) + '</span>',
+				state.lastActionAt
+					? '<small>Last action: ' + escapeHtml( state.lastActionAt ) + '</small>'
+					: '',
+			'</div>',
+		].join( '' );
+	}
+
+	function renderPromptPreview() {
+		return [
+			'<div class="factory-prompt-preview">',
+				'<div class="factory-prompt-preview-heading">',
+					'<h3>Describe your website</h3>',
+					'<span>Prompt Preview</span>',
+				'</div>',
+				'<textarea readonly rows="4">' + escapeHtml( realEstatePrompt ) + '</textarea>',
+				'<p>Beta mode: this prompt currently runs the prepared Real Estate preset.</p>',
+			'</div>',
+		].join( '' );
 	}
 
 	function renderBetaPlanPreview() {
@@ -252,12 +272,13 @@
 						renderDemoStatus( 'Doctor OK', doctorOk ),
 					'</div>',
 				'</div>',
+				renderPromptPreview(),
 				'<div class="factory-demo-actions">',
 					'<button type="button" class="button button-primary" data-factory-beta-action="plan"' + ( isBusy ? ' disabled' : '' ) + '>',
 						state.betaAction === 'plan' ? 'Previewing...' : 'Preview plan',
 					'</button>',
 					'<button type="button" class="button" data-factory-beta-action="apply"' + ( isBusy ? ' disabled' : '' ) + '>',
-						state.betaAction === 'apply' ? 'Applying...' : 'Apply preset',
+						state.betaAction === 'apply' ? 'Generating...' : 'Generate Real Estate Demo',
 					'</button>',
 					'<button type="button" class="button" data-factory-beta-action="refresh"' + ( isBusy ? ' disabled' : '' ) + '>',
 						state.betaAction === 'refresh' ? 'Refreshing...' : 'Refresh validation proof',
@@ -533,6 +554,10 @@
 		};
 	}
 
+	function markLastAction() {
+		state.lastActionAt = new Date().toLocaleString();
+	}
+
 	function previewRealEstatePlan() {
 		state.betaAction = 'plan';
 		state.betaMessage = null;
@@ -541,7 +566,8 @@
 		request( config.endpoints?.realEstatePlan || '/beta/real-estate/plan' )
 			.then( function ( data ) {
 				state.betaPlan = data.plan || null;
-				setBetaMessage( 'ok', 'Preview plan loaded.' );
+				markLastAction();
+				setBetaMessage( 'ok', 'Preview plan generated.' );
 			} )
 			.catch( function ( error ) {
 				setBetaMessage( 'error', 'Preview plan failed: ' + error.message );
@@ -568,10 +594,12 @@
 						items: [],
 					}
 					: state.betaPlan;
-				setBetaMessage(
-					statusValue( data.status ) === 'error' ? 'error' : 'ok',
-					data.message || 'Real Estate preset applied.'
-				);
+				markLastAction();
+				if ( statusValue( data.status ) === 'error' ) {
+					setBetaMessage( 'error', data.message || 'Real Estate demo generation failed.' );
+				} else {
+					setBetaMessage( 'ok', 'Real Estate demo generated successfully.' );
+				}
 				return refreshDashboardData();
 			} )
 			.catch( function ( error ) {
@@ -590,6 +618,7 @@
 
 		refreshDashboardData()
 			.then( function () {
+				markLastAction();
 				setBetaMessage( 'ok', 'Validation proof refreshed.' );
 			} )
 			.catch( function ( error ) {
